@@ -17,23 +17,21 @@ interface OutputDef {
   primary?: boolean;
 }
 
-// Input definitions matching the backend
 const INPUT_DEFS: InputDef[] = [
-  { name: 'self_employment_income', label: 'Self-employment income', group: 'QBI Income Sources', default: 0, type: 'currency' },
+  { name: 'self_employment_income', label: 'Self-employment', group: 'QBI Income Sources', default: 0, type: 'currency' },
   { name: 'self_employment_income_would_be_qualified', label: 'Qualified', group: 'QBI Income Sources', default: true, type: 'bool' },
-  { name: 'partnership_s_corp_income', label: 'Partnership / S-corp income', group: 'QBI Income Sources', default: 0, type: 'currency' },
+  { name: 'partnership_s_corp_income', label: 'Partnership / S-corp', group: 'QBI Income Sources', default: 0, type: 'currency' },
   { name: 'partnership_s_corp_income_would_be_qualified', label: 'Qualified', group: 'QBI Income Sources', default: true, type: 'bool' },
-  { name: 'farm_operations_income', label: 'Farm operations income', group: 'QBI Income Sources', default: 0, type: 'currency' },
+  { name: 'farm_operations_income', label: 'Farm operations', group: 'QBI Income Sources', default: 0, type: 'currency' },
   { name: 'farm_operations_income_would_be_qualified', label: 'Qualified', group: 'QBI Income Sources', default: true, type: 'bool' },
-  { name: 'farm_rent_income', label: 'Farm rental income', group: 'QBI Income Sources', default: 0, type: 'currency' },
+  { name: 'farm_rent_income', label: 'Farm rental', group: 'QBI Income Sources', default: 0, type: 'currency' },
   { name: 'farm_rent_income_would_be_qualified', label: 'Qualified', group: 'QBI Income Sources', default: true, type: 'bool' },
-  { name: 'rental_income', label: 'Rental income', group: 'QBI Income Sources', default: 0, type: 'currency' },
+  { name: 'rental_income', label: 'Rental', group: 'QBI Income Sources', default: 0, type: 'currency' },
   { name: 'rental_income_would_be_qualified', label: 'Qualified', group: 'QBI Income Sources', default: true, type: 'bool' },
-  { name: 'estate_income', label: 'Estate / trust income', group: 'QBI Income Sources', default: 0, type: 'currency' },
+  { name: 'estate_income', label: 'Estate / trust', group: 'QBI Income Sources', default: 0, type: 'currency' },
   { name: 'estate_income_would_be_qualified', label: 'Qualified', group: 'QBI Income Sources', default: true, type: 'bool' },
   { name: 'sstb_self_employment_income', label: 'SSTB self-employment income', group: 'SSTB Income', default: 0, type: 'currency' },
   { name: 'sstb_self_employment_income_would_be_qualified', label: 'SSTB SE income is qualified', group: 'SSTB Income', default: true, type: 'bool' },
-  { name: 'business_is_sstb', label: 'Business is SSTB (legacy flag)', group: 'SSTB Income', default: false, type: 'bool' },
   { name: 'w2_wages_from_qualified_business', label: 'W-2 wages from qualified business', group: 'Wage & Property Limitation', default: 0, type: 'currency' },
   { name: 'unadjusted_basis_qualified_property', label: 'UBIA of qualified property', group: 'Wage & Property Limitation', default: 0, type: 'currency' },
   { name: 'sstb_w2_wages_from_qualified_business', label: 'SSTB allocable W-2 wages', group: 'Wage & Property Limitation', default: 0, type: 'currency' },
@@ -42,8 +40,8 @@ const INPUT_DEFS: InputDef[] = [
   { name: 'employment_income', label: 'W-2 employment income', group: 'Other Income', default: 0, type: 'currency' },
   { name: 'long_term_capital_gains', label: 'Long-term capital gains', group: 'Other Income', default: 0, type: 'currency' },
   { name: 'short_term_capital_gains', label: 'Short-term capital gains', group: 'Other Income', default: 0, type: 'currency' },
-  { name: 'qualified_dividend_income', label: 'Qualified dividend income', group: 'Other Income', default: 0, type: 'currency' },
-  { name: 'taxable_interest_income', label: 'Taxable interest income', group: 'Other Income', default: 0, type: 'currency' },
+  { name: 'qualified_dividend_income', label: 'Qualified dividends', group: 'Other Income', default: 0, type: 'currency' },
+  { name: 'taxable_interest_income', label: 'Taxable interest', group: 'Other Income', default: 0, type: 'currency' },
 ];
 
 const OUTPUT_DEFS: OutputDef[] = [
@@ -71,8 +69,13 @@ function getQbiIncomeRows() {
   });
 }
 
-function getGroups() {
-  const groups: { name: string; inputs: InputDef[] }[] = [];
+interface GroupDef {
+  name: string;
+  inputs: InputDef[];
+}
+
+function getGroups(): GroupDef[] {
+  const groups: GroupDef[] = [];
   const seen = new Set<string>();
   for (const def of INPUT_DEFS) {
     if (def.group === 'QBI Income Sources') continue;
@@ -90,6 +93,23 @@ const formatCurrency = (val: number) =>
 
 const formatCurrencyLarge = (val: number) =>
   val.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+const Chevron = ({ open }: { open: boolean }) => (
+  <svg
+    className={`w-4 h-4 text-pe-text-tertiary transition-transform ${open ? 'rotate-90' : ''}`}
+    fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+  >
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+  </svg>
+);
+
+function countNonDefault(inputs: Record<string, any>, defs: InputDef[]): number {
+  return defs.filter((d) => {
+    const val = inputs[d.name];
+    if (d.type === 'currency') return val !== 0 && val !== undefined;
+    return val !== d.default && val !== undefined;
+  }).length;
+}
 
 interface CalcResult {
   outputs: Record<string, number | { error: string }>;
@@ -115,6 +135,16 @@ export default function CalculatorView() {
   const [result, setResult] = useState<CalcResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [openSections, setOpenSections] = useState<Set<string>>(new Set(['QBI Income Sources']));
+
+  const toggleSection = (name: string) => {
+    setOpenSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
 
   const handleChange = useCallback((name: string, value: any) => {
     setInputs((prev) => ({ ...prev, [name]: value }));
@@ -146,26 +176,23 @@ export default function CalculatorView() {
   const otherGroups = getGroups();
   const primaryOutput = result ? OUTPUT_DEFS.find((o) => o.primary) : null;
 
+  const qbiDefs = INPUT_DEFS.filter((d) => d.group === 'QBI Income Sources');
+
   return (
     <div className="h-full flex bg-pe-bg-secondary">
       {/* Left: Inputs */}
-      <div className="w-[420px] border-r border-pe-gray-200 bg-white overflow-y-auto flex flex-col">
-        <div className="p-6 flex-1">
-          <h2 className="text-lg font-semibold text-pe-text-primary mb-1">Calculator inputs</h2>
-          <p className="text-sm text-pe-text-secondary mb-6">
-            All values flow directly into the PolicyEngine US model.
-          </p>
-
-          {/* Filing Status & Year */}
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            <div>
-              <label className="block text-xs font-semibold text-pe-text-tertiary uppercase tracking-wide mb-1.5">
+      <div className="w-[460px] border-r border-pe-gray-200 bg-white overflow-y-auto flex flex-col">
+        <div className="p-5 pb-3 flex-1">
+          {/* Filing Status & Year — always visible */}
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-pe-text-tertiary mb-1">
                 Filing status
               </label>
               <select
                 value={inputs.filing_status}
                 onChange={(e) => handleChange('filing_status', e.target.value)}
-                className="w-full px-3 py-2 border border-pe-gray-200 rounded-pe-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pe-teal-500 focus:border-pe-teal-500"
+                className="w-full px-2.5 py-1.5 border border-pe-gray-200 rounded-pe-md text-sm bg-white focus:outline-none focus:ring-1 focus:ring-pe-teal-500"
               >
                 <option value="SINGLE">Single</option>
                 <option value="JOINT">Married filing jointly</option>
@@ -175,13 +202,13 @@ export default function CalculatorView() {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-pe-text-tertiary uppercase tracking-wide mb-1.5">
+              <label className="block text-xs font-medium text-pe-text-tertiary mb-1">
                 Tax year
               </label>
               <select
                 value={inputs.year}
                 onChange={(e) => handleChange('year', parseInt(e.target.value))}
-                className="w-full px-3 py-2 border border-pe-gray-200 rounded-pe-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pe-teal-500 focus:border-pe-teal-500"
+                className="w-full px-2.5 py-1.5 border border-pe-gray-200 rounded-pe-md text-sm bg-white focus:outline-none focus:ring-1 focus:ring-pe-teal-500"
               >
                 {[2024, 2025, 2026].map((y) => (
                   <option key={y} value={y}>{y}</option>
@@ -190,83 +217,127 @@ export default function CalculatorView() {
             </div>
           </div>
 
-          {/* QBI Income Sources */}
-          <div className="mb-6">
-            <h3 className="text-xs font-semibold text-pe-text-tertiary uppercase tracking-wide mb-3">
-              QBI income sources
-            </h3>
-            <div className="space-y-3">
-              {qbiIncomeRows.map(({ income, qualified }) => (
-                <div key={income.name}>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-sm font-medium text-pe-text-primary">{income.label}</label>
-                    {qualified && (
-                      <label className="flex items-center gap-1.5 text-xs text-pe-text-tertiary cursor-pointer">
+          {/* QBI Income Sources — compact table */}
+          <div className="border border-pe-gray-200 rounded-pe-lg mb-2 overflow-hidden">
+            <button
+              onClick={() => toggleSection('QBI Income Sources')}
+              className="w-full flex items-center justify-between px-3 py-2 bg-pe-gray-50 hover:bg-pe-gray-100 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Chevron open={openSections.has('QBI Income Sources')} />
+                <span className="text-xs font-semibold text-pe-text-secondary uppercase tracking-wide">
+                  QBI income sources
+                </span>
+              </div>
+              {!openSections.has('QBI Income Sources') && countNonDefault(inputs, qbiDefs) > 0 && (
+                <span className="text-xs text-pe-teal-600 font-medium">
+                  {countNonDefault(inputs, qbiDefs)} set
+                </span>
+              )}
+            </button>
+            {openSections.has('QBI Income Sources') && (
+              <div>
+                {/* Header row */}
+                <div className="grid grid-cols-[1fr_140px_28px] gap-1 px-3 py-1 border-t border-pe-gray-100 text-[10px] text-pe-text-tertiary uppercase tracking-wider">
+                  <span>Source</span>
+                  <span className="text-right">Amount</span>
+                  <span className="text-center" title="Qualified">Q</span>
+                </div>
+                {qbiIncomeRows.map(({ income, qualified }) => (
+                  <div
+                    key={income.name}
+                    className="grid grid-cols-[1fr_140px_28px] gap-1 items-center px-3 py-1.5 border-t border-pe-gray-100 hover:bg-pe-gray-50"
+                  >
+                    <label className="text-sm text-pe-text-primary truncate">{income.label}</label>
+                    <div className="relative">
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-pe-text-tertiary text-xs">$</span>
+                      <input
+                        type="number"
+                        value={inputs[income.name] ?? 0}
+                        onChange={(e) => handleChange(income.name, parseFloat(e.target.value) || 0)}
+                        className="w-full pl-5 pr-1.5 py-1 border border-pe-gray-200 rounded text-sm text-right tabular-nums focus:outline-none focus:ring-1 focus:ring-pe-teal-500"
+                      />
+                    </div>
+                    <div className="flex justify-center">
+                      {qualified && (
                         <input
                           type="checkbox"
                           checked={inputs[qualified.name] ?? true}
                           onChange={(e) => handleChange(qualified.name, e.target.checked)}
+                          title="Qualified business income"
                           className="rounded border-pe-gray-300 text-pe-teal-500 focus:ring-pe-teal-500"
                         />
-                        Qualified
-                      </label>
-                    )}
+                      )}
+                    </div>
                   </div>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-pe-text-tertiary text-sm">$</span>
-                    <input
-                      type="number"
-                      value={inputs[income.name] ?? 0}
-                      onChange={(e) => handleChange(income.name, parseFloat(e.target.value) || 0)}
-                      className="w-full pl-7 pr-3 py-2 border border-pe-gray-200 rounded-pe-md text-sm focus:outline-none focus:ring-2 focus:ring-pe-teal-500 focus:border-pe-teal-500"
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Other input groups */}
-          {otherGroups.map((group) => (
-            <div key={group.name} className="mb-6">
-              <h3 className="text-xs font-semibold text-pe-text-tertiary uppercase tracking-wide mb-3">
-                {group.name}
-              </h3>
-              <div className="space-y-3">
-                {group.inputs.map((def) =>
-                  def.type === 'currency' ? (
-                    <div key={def.name}>
-                      <label className="block text-sm font-medium text-pe-text-primary mb-1">
-                        {def.label}
-                      </label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-pe-text-tertiary text-sm">$</span>
-                        <input
-                          type="number"
-                          value={inputs[def.name] ?? 0}
-                          onChange={(e) => handleChange(def.name, parseFloat(e.target.value) || 0)}
-                          className="w-full pl-7 pr-3 py-2 border border-pe-gray-200 rounded-pe-md text-sm focus:outline-none focus:ring-2 focus:ring-pe-teal-500 focus:border-pe-teal-500"
-                        />
+          {/* Other groups as collapsible sections */}
+          {otherGroups.map((group) => {
+            const isOpen = openSections.has(group.name);
+            const currencyInputs = group.inputs.filter((d) => d.type === 'currency');
+            const boolInputs = group.inputs.filter((d) => d.type === 'bool');
+            const nonDefaultCount = countNonDefault(inputs, group.inputs);
+
+            return (
+              <div key={group.name} className="border border-pe-gray-200 rounded-pe-lg mb-2 overflow-hidden">
+                <button
+                  onClick={() => toggleSection(group.name)}
+                  className="w-full flex items-center justify-between px-3 py-2 bg-pe-gray-50 hover:bg-pe-gray-100 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <Chevron open={isOpen} />
+                    <span className="text-xs font-semibold text-pe-text-secondary uppercase tracking-wide">
+                      {group.name}
+                    </span>
+                  </div>
+                  {!isOpen && nonDefaultCount > 0 && (
+                    <span className="text-xs text-pe-teal-600 font-medium">
+                      {nonDefaultCount} set
+                    </span>
+                  )}
+                </button>
+                {isOpen && (
+                  <div className="border-t border-pe-gray-100">
+                    {currencyInputs.map((def) => (
+                      <div
+                        key={def.name}
+                        className="grid grid-cols-[1fr_140px] gap-2 items-center px-3 py-1.5 border-t first:border-t-0 border-pe-gray-100 hover:bg-pe-gray-50"
+                      >
+                        <label className="text-sm text-pe-text-primary">{def.label}</label>
+                        <div className="relative">
+                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-pe-text-tertiary text-xs">$</span>
+                          <input
+                            type="number"
+                            value={inputs[def.name] ?? 0}
+                            onChange={(e) => handleChange(def.name, parseFloat(e.target.value) || 0)}
+                            className="w-full pl-5 pr-1.5 py-1 border border-pe-gray-200 rounded text-sm text-right tabular-nums focus:outline-none focus:ring-1 focus:ring-pe-teal-500"
+                          />
+                        </div>
                       </div>
-                    </div>
-                  ) : (
-                    <label
-                      key={def.name}
-                      className="flex items-center gap-2.5 p-3 bg-pe-gray-50 rounded-pe-md border border-pe-gray-200 cursor-pointer hover:bg-pe-gray-100 transition-colors"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={inputs[def.name] ?? def.default}
-                        onChange={(e) => handleChange(def.name, e.target.checked)}
-                        className="rounded border-pe-gray-300 text-pe-teal-500 focus:ring-pe-teal-500"
-                      />
-                      <span className="text-sm text-pe-text-primary">{def.label}</span>
-                    </label>
-                  )
+                    ))}
+                    {boolInputs.map((def) => (
+                      <label
+                        key={def.name}
+                        className="flex items-center gap-2 px-3 py-1.5 border-t border-pe-gray-100 hover:bg-pe-gray-50 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={inputs[def.name] ?? def.default}
+                          onChange={(e) => handleChange(def.name, e.target.checked)}
+                          className="rounded border-pe-gray-300 text-pe-teal-500 focus:ring-pe-teal-500"
+                        />
+                        <span className="text-sm text-pe-text-primary">{def.label}</span>
+                      </label>
+                    ))}
+                  </div>
                 )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Sticky calculate button */}
@@ -274,7 +345,7 @@ export default function CalculatorView() {
           <button
             onClick={handleCalculate}
             disabled={loading}
-            className="w-full py-3 bg-pe-teal-500 text-white rounded-pe-lg font-medium hover:bg-pe-teal-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="w-full py-2.5 bg-pe-teal-500 text-white rounded-pe-lg font-medium hover:bg-pe-teal-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {loading ? 'Computing...' : 'Calculate QBID'}
           </button>
@@ -372,7 +443,7 @@ export default function CalculatorView() {
             <div className="bg-pe-teal-50 rounded-pe-lg border border-pe-teal-200 p-5">
               <h3 className="text-sm font-semibold text-pe-teal-800 mb-2">How this works</h3>
               <p className="text-sm text-pe-teal-700 leading-relaxed">
-                This calculator runs a full PolicyEngine US simulation (v1.669.0).
+                This calculator runs a full PolicyEngine US simulation.
                 The QBID is computed following IRC &sect;199A: 20% of QBI, subject to
                 W-2 wage and property limitations, SSTB phase-out, and capped at
                 20% of taxable income less net capital gains.
