@@ -3,13 +3,11 @@ import {
   ComparisonResult,
   ComparisonItem,
   AdjacentSectionCoverage,
-  CalculationComparisonInput,
-  CalculationComparisonResult,
 } from '../types/taxsim';
 
 const API_BASE = 'http://localhost:8000';
 
-type TabType = 'overview' | 'adjacent' | 'code' | 'calculator';
+type TabType = 'overview' | 'adjacent' | 'code';
 
 function TaxsimView() {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
@@ -55,7 +53,7 @@ function TaxsimView() {
       {/* Tab navigation */}
       <div className="bg-white border-b border-slate-200 px-6 py-2">
         <nav className="flex gap-6">
-          {(['overview', 'adjacent', 'code', 'calculator'] as TabType[]).map((tab) => (
+          {(['overview', 'adjacent', 'code'] as TabType[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -68,7 +66,6 @@ function TaxsimView() {
               {tab === 'overview' && 'Implementation Comparison'}
               {tab === 'adjacent' && 'Adjacent Sections Coverage'}
               {tab === 'code' && 'Code Side-by-Side'}
-              {tab === 'calculator' && 'Compare Calculations'}
             </button>
           ))}
         </nav>
@@ -79,7 +76,6 @@ function TaxsimView() {
         {activeTab === 'overview' && comparison && <OverviewTab comparison={comparison} />}
         {activeTab === 'adjacent' && comparison && <AdjacentSectionsTab comparison={comparison} />}
         {activeTab === 'code' && comparison && <CodeTab comparison={comparison} />}
-        {activeTab === 'calculator' && <CalculatorTab />}
       </div>
     </div>
   );
@@ -627,292 +623,6 @@ function CodeTab({ comparison }: { comparison: ComparisonResult }) {
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Calculator Tab
-function CalculatorTab() {
-  const [inputs, setInputs] = useState<CalculationComparisonInput>({
-    self_employment_income: 0,
-    partnership_s_corp_income: 100000,
-    sstb_income: 0,
-    rental_income: 0,
-    filing_status: 'SINGLE',
-    taxable_income: 200000,
-    w2_wages: 0,
-    property_basis: 0,
-    capital_gains: 0,
-    year: 2023,
-  });
-  const [result, setResult] = useState<CalculationComparisonResult | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  const runComparison = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/taxsim/calculate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(inputs),
-      });
-      if (!res.ok) throw new Error('Calculation failed');
-      const data = await res.json();
-      setResult(data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleInputChange = (field: keyof CalculationComparisonInput, value: string | number) => {
-    setInputs((prev) => ({ ...prev, [field]: value }));
-  };
-
-  return (
-    <div className="h-full overflow-y-auto p-6">
-      <div className="max-w-6xl mx-auto">
-        <h2 className="text-lg font-semibold text-slate-900 mb-4">Compare Calculations</h2>
-
-        <div className="grid grid-cols-3 gap-6">
-          {/* Inputs */}
-          <div className="bg-white rounded-lg border border-slate-200 p-6">
-            <h3 className="font-medium text-slate-900 mb-4">Input Parameters</h3>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm text-slate-600 mb-1">Filing Status</label>
-                <select
-                  value={inputs.filing_status}
-                  onChange={(e) => handleInputChange('filing_status', e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm"
-                >
-                  <option value="SINGLE">Single</option>
-                  <option value="JOINT">Married Filing Jointly</option>
-                  <option value="HEAD_OF_HOUSEHOLD">Head of Household</option>
-                  <option value="SEPARATE">Married Filing Separately</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm text-slate-600 mb-1">Year</label>
-                <select
-                  value={inputs.year}
-                  onChange={(e) => handleInputChange('year', parseInt(e.target.value))}
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm"
-                >
-                  <option value={2023}>2023</option>
-                  <option value={2024}>2024</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm text-slate-600 mb-1">Taxable Income</label>
-                <input
-                  type="number"
-                  value={inputs.taxable_income}
-                  onChange={(e) => handleInputChange('taxable_income', parseFloat(e.target.value) || 0)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm"
-                />
-              </div>
-
-              <hr className="border-slate-200" />
-
-              <h4 className="font-medium text-slate-700 text-sm">QBI Income Sources</h4>
-
-              <div>
-                <label className="block text-sm text-slate-600 mb-1">S-Corp / Partnership Income (non-SSTB)</label>
-                <input
-                  type="number"
-                  value={inputs.partnership_s_corp_income}
-                  onChange={(e) => handleInputChange('partnership_s_corp_income', parseFloat(e.target.value) || 0)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-slate-600 mb-1">SSTB Income</label>
-                <input
-                  type="number"
-                  value={inputs.sstb_income}
-                  onChange={(e) => handleInputChange('sstb_income', parseFloat(e.target.value) || 0)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-slate-600 mb-1">Rental Income</label>
-                <input
-                  type="number"
-                  value={inputs.rental_income}
-                  onChange={(e) => handleInputChange('rental_income', parseFloat(e.target.value) || 0)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm"
-                />
-              </div>
-
-              <hr className="border-slate-200" />
-
-              <h4 className="font-medium text-slate-700 text-sm">Wage/Property Limitation</h4>
-
-              <div>
-                <label className="block text-sm text-slate-600 mb-1">W-2 Wages Paid by Business</label>
-                <input
-                  type="number"
-                  value={inputs.w2_wages}
-                  onChange={(e) => handleInputChange('w2_wages', parseFloat(e.target.value) || 0)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-slate-600 mb-1">Qualified Property Basis</label>
-                <input
-                  type="number"
-                  value={inputs.property_basis}
-                  onChange={(e) => handleInputChange('property_basis', parseFloat(e.target.value) || 0)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-slate-600 mb-1">Capital Gains</label>
-                <input
-                  type="number"
-                  value={inputs.capital_gains}
-                  onChange={(e) => handleInputChange('capital_gains', parseFloat(e.target.value) || 0)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded text-sm"
-                />
-              </div>
-
-              <button
-                onClick={runComparison}
-                disabled={loading}
-                className="w-full py-2 bg-blue-600 text-white rounded font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
-              >
-                {loading ? 'Calculating...' : 'Compare Calculations'}
-              </button>
-            </div>
-          </div>
-
-          {/* Results */}
-          <div className="col-span-2 space-y-4">
-            {result && (
-              <>
-                {/* Summary */}
-                <div className="bg-white rounded-lg border border-slate-200 p-6">
-                  <h3 className="font-medium text-slate-900 mb-4">Results Comparison</h3>
-
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="bg-blue-50 rounded-lg p-4 text-center">
-                      <div className="text-xs text-blue-600 uppercase font-semibold mb-1">TAXSIM</div>
-                      <div className="text-2xl font-bold text-blue-700">
-                        ${result.taxsim_result.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                      </div>
-                    </div>
-                    <div className="bg-emerald-50 rounded-lg p-4 text-center">
-                      <div className="text-xs text-emerald-600 uppercase font-semibold mb-1">PolicyEngine</div>
-                      <div className="text-2xl font-bold text-emerald-700">
-                        ${result.policyengine_result.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                      </div>
-                    </div>
-                    <div className={`rounded-lg p-4 text-center ${
-                      Math.abs(result.difference) < 1
-                        ? 'bg-green-50'
-                        : result.difference > 0
-                          ? 'bg-yellow-50'
-                          : 'bg-orange-50'
-                    }`}>
-                      <div className="text-xs text-slate-600 uppercase font-semibold mb-1">Difference</div>
-                      <div className={`text-2xl font-bold ${
-                        Math.abs(result.difference) < 1
-                          ? 'text-green-700'
-                          : result.difference > 0
-                            ? 'text-yellow-700'
-                            : 'text-orange-700'
-                      }`}>
-                        {result.difference >= 0 ? '+' : ''}${result.difference.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                        {result.difference_pct !== null && (
-                          <span className="text-sm ml-1">({result.difference_pct.toFixed(1)}%)</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Step comparison */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-white rounded-lg border border-slate-200 p-4">
-                    <h4 className="font-medium text-blue-600 text-sm mb-3">TAXSIM Steps</h4>
-                    <table className="w-full text-sm">
-                      <tbody>
-                        {result.taxsim_steps.map((step, i) => (
-                          <tr key={i} className="border-b border-slate-100 last:border-0">
-                            <td className="py-2 text-slate-600">{step.name}</td>
-                            <td className="py-2 text-right font-mono text-slate-900">
-                              {typeof step.value === 'number'
-                                ? step.name.includes('%')
-                                  ? `${step.value.toFixed(1)}%`
-                                  : `$${step.value.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
-                                : step.value}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <div className="bg-white rounded-lg border border-slate-200 p-4">
-                    <h4 className="font-medium text-emerald-600 text-sm mb-3">PolicyEngine Steps</h4>
-                    <table className="w-full text-sm">
-                      <tbody>
-                        {result.policyengine_steps.map((step, i) => (
-                          <tr key={i} className="border-b border-slate-100 last:border-0">
-                            <td className="py-2 text-slate-600">{step.name}</td>
-                            <td className="py-2 text-right font-mono text-slate-900">
-                              {typeof step.value === 'number'
-                                ? step.name.includes('%') || step.name.includes('Rate')
-                                  ? `${step.value.toFixed(1)}%`
-                                  : `$${step.value.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
-                                : step.value}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* Notes */}
-                {result.notes.length > 0 && (
-                  <div className="bg-amber-50 rounded-lg border border-amber-200 p-4">
-                    <h4 className="font-medium text-amber-800 text-sm mb-2">Notes</h4>
-                    <ul className="space-y-1">
-                      {result.notes.map((note, i) => (
-                        <li key={i} className="text-sm text-amber-700 flex items-start gap-2">
-                          <span className="text-amber-500 mt-0.5">•</span>
-                          {note}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </>
-            )}
-
-            {!result && (
-              <div className="bg-white rounded-lg border border-slate-200 p-12 text-center">
-                <div className="text-slate-400 mb-2">
-                  <svg className="w-12 h-12 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <p className="text-slate-600">Enter values and click "Compare Calculations" to see the difference</p>
-              </div>
-            )}
           </div>
         </div>
       </div>
