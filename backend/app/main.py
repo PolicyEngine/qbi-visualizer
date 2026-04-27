@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.api import variables, law_structure, taxsim_comparison, tax_form_mapping
+from app.api import variables, law_structure, taxsim_comparison, tax_form_mapping, calculator
 
 app = FastAPI(
     title=settings.API_TITLE,
@@ -50,6 +50,7 @@ app.include_router(variables.router, prefix="/api/variables", tags=["variables"]
 app.include_router(law_structure.router, prefix="/api/law", tags=["law-structure"])
 app.include_router(taxsim_comparison.router, tags=["taxsim"])
 app.include_router(tax_form_mapping.router, tags=["tax-forms"])
+app.include_router(calculator.router, prefix="/api/qbi", tags=["calculator"])
 
 
 if __name__ == "__main__":
