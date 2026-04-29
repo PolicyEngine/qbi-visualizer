@@ -271,13 +271,17 @@ function BreakdownStaged({ outputs }: { outputs: Outputs }) {
 export default function CalculatorView() {
   const buildDefaults = () => {
     const defaults: Record<string, any> = {
-      year: 2024,
+      year: 2025,
       filing_status: 'SINGLE',
       state_code: 'TX',
     };
     for (const def of INPUT_DEFS) {
       defaults[def.name] = def.default;
     }
+    // Realistic seed: a single filer with $100k of non-SSTB self-employment
+    // income, below the 2025 threshold ($197,300), so no wage/UBIA cap and
+    // no SSTB phase-out — yields ~$18.6k QBID, capped only by taxable income.
+    defaults.self_employment_income = 100_000;
     return defaults;
   };
 
