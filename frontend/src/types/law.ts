@@ -75,5 +75,4 @@ export interface QBIDLawStructure {
   missing_sections: number;
   sections: LawSection[];
   adjacent_sections: AdjacentSection[];
-  policyengine_commit?: string;
 }

@@ -96,4 +96,3 @@ class QBIDLawStructure(BaseModel):
 
     sections: List[LawSection]
     adjacent_sections: List[AdjacentSection] = Field(default_factory=list)
-    policyengine_commit: Optional[str] = None
