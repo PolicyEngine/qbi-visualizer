@@ -21,7 +21,6 @@ CORNELL_BASE = "https://www.law.cornell.edu/uscode/text/26/199A"
 def build_qbid_law_structure(
     variables: Dict,
     parameters: Dict,
-    commit_sha: Optional[str] = None
 ) -> QBIDLawStructure:
     """Build the complete law-structured representation of QBID."""
 
@@ -55,7 +54,6 @@ def build_qbid_law_structure(
         missing_sections=missing,
         sections=sections,
         adjacent_sections=adjacent_sections,
-        policyengine_commit=commit_sha,
     )
 
 

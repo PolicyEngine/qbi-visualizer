@@ -24,24 +24,16 @@ app.add_middleware(
 
 @app.get("/")
 async def root():
-    """Health check endpoint."""
     return {
         "status": "ok",
         "app": settings.API_TITLE,
         "version": settings.API_VERSION,
-        "github_repo": settings.GITHUB_REPO,
-        "github_branch": settings.GITHUB_BRANCH,
     }
 
 
 @app.get("/health")
 async def health():
-    """Detailed health check."""
-    return {
-        "status": "healthy",
-        "repos_dir": str(settings.REPOS_DIR),
-        "cache_dir": str(settings.CACHE_DIR),
-    }
+    return {"status": "healthy"}
 
 
 # Include routers
