@@ -2,8 +2,8 @@
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Dict, Any, Optional
 
+from app.services import pe_parameters as pe
 from app.services.calculator import calculate, get_input_metadata, get_output_metadata
 
 router = APIRouter()
@@ -12,7 +12,7 @@ router = APIRouter()
 class CalculateRequest(BaseModel):
     """Request body for QBI calculation."""
 
-    year: int = 2024
+    year: int = pe.DEFAULT_YEAR
     filing_status: str = "SINGLE"
     state_code: str = "TX"
     # All other fields are passed through as variable values

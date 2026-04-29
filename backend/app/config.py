@@ -1,10 +1,12 @@
 """Application configuration."""
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
+
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     API_TITLE: str = "QBI Visualizer API"
     API_VERSION: str = "0.1.0"
@@ -18,10 +20,6 @@ class Settings(BaseSettings):
         "http://localhost:5177",
         "http://localhost:3000",
     ]
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
 
 
 settings = Settings()
