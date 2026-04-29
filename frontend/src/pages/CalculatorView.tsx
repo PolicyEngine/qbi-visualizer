@@ -48,6 +48,7 @@ const OUTPUT_DEFS: OutputDef[] = [
   { name: 'qualified_business_income_deduction', label: 'Qualified Business Income Deduction', entity: 'tax_unit', primary: true },
   { name: 'qualified_business_income', label: 'Non-SSTB qualified business income', entity: 'person' },
   { name: 'sstb_qualified_business_income', label: 'SSTB qualified business income', entity: 'person' },
+  { name: 'qualified_reit_and_ptp_income', label: 'Qualified REIT dividends and PTP income', entity: 'person' },
   { name: 'qbid_amount', label: 'Per-person QBID (before TI cap)', entity: 'person' },
   { name: 'taxable_income_less_qbid', label: 'Taxable income (before QBID)', entity: 'tax_unit' },
   { name: 'adjusted_net_capital_gain', label: 'Adjusted net capital gain', entity: 'tax_unit' },
@@ -146,37 +147,63 @@ interface Stage {
 function buildStages(outputs: Outputs): Stage[] {
   const nonSstb = num(outputs, 'qualified_business_income');
   const sstb = num(outputs, 'sstb_qualified_business_income');
+  const totalQbi = nonSstb + sstb;
+  const reitPtp = num(outputs, 'qualified_reit_and_ptp_income');
   const seTax = num(outputs, 'self_employment_tax_ald_person');
   const seHealth = num(outputs, 'self_employed_health_insurance_ald_person');
   const sePension = num(outputs, 'self_employed_pension_contribution_ald_person');
   const qbidAmount = num(outputs, 'qbid_amount');
   const tiBefore = num(outputs, 'taxable_income_less_qbid');
   const netCapGain = num(outputs, 'adjusted_net_capital_gain');
-  const tiCap = 0.20 * Math.max(0, tiBefore - netCapGain);
+
+  // Form 8995 derived values
+  const qbiComponentMax = 0.20 * Math.max(0, totalQbi); // L5 if no caps
+  const reitPtpComponent = 0.20 * Math.max(0, reitPtp); // L9
+  const tiLessCapGain = Math.max(0, tiBefore - netCapGain); // L13
+  const incomeLimit = 0.20 * tiLessCapGain; // L14
+  const finalQbid = Math.min(qbidAmount, incomeLimit); // L15
+
+  // Detect whether wage caps or SSTB phase-out reduced qbid_amount below
+  // 20% × Total QBI (plus the REIT/PTP component, which has no cap).
+  const unconstrainedQbi = qbiComponentMax + reitPtpComponent;
+  const reductionFromCaps = Math.max(0, unconstrainedQbi - qbidAmount);
 
   return [
     {
       title: 'Qualified business income',
       caption: 'Per-person QBI components after SE-tax / health / retirement allocations',
-      total: nonSstb + sstb,
-      totalLabel: 'Total QBI',
+      total: totalQbi,
+      totalLabel: 'Total QBI (L4)',
       rows: [
-        { name: 'qualified_business_income', label: 'Non-SSTB QBI', value: nonSstb },
-        { name: 'sstb_qualified_business_income', label: 'SSTB QBI', value: sstb },
+        { name: 'qualified_business_income', label: 'Non-SSTB QBI', formLine: 'Form 8995 L2 (non-SSTB)', value: nonSstb },
+        { name: 'sstb_qualified_business_income', label: 'SSTB QBI', formLine: 'Form 8995-A Part I (SSTB)', value: sstb },
         { name: 'self_employment_tax_ald_person', label: 'SE tax deduction (allocable)', value: seTax, negative: true },
         { name: 'self_employed_health_insurance_ald_person', label: 'SE health insurance (allocable)', value: seHealth, negative: true },
         { name: 'self_employed_pension_contribution_ald_person', label: 'SE retirement contribution (allocable)', value: sePension, negative: true },
       ],
     },
     {
-      title: 'QBID computation',
-      caption: 'Form 8995 Lines 10–15 / Form 8995-A Part IV',
+      title: 'QBI components (Form 8995 L5 + L9)',
+      caption: '20% applied to Total QBI and to REIT/PTP income; per-business wage/UBIA caps and SSTB phase-out reduce the QBI side above the threshold (Form 8995-A Part II/III)',
       rows: [
-        { name: 'qbid_amount', label: 'QBI deduction before income limit', formLine: 'Form 8995 L10', value: qbidAmount },
+        { label: '20% × Total QBI (no limits)', formLine: 'Form 8995 L5', value: qbiComponentMax, computed: true },
+        ...(reductionFromCaps > 0
+          ? [{ label: '− Wage/UBIA cap and SSTB phase-out (§199A(b)(2), (d)(3))', value: reductionFromCaps, negative: true, computed: true } as StageRow]
+          : []),
+        { name: 'qualified_reit_and_ptp_income', label: 'Qualified REIT/PTP income', formLine: 'Form 8995 L6', value: reitPtp },
+        { label: '20% × REIT/PTP = REIT/PTP component', formLine: 'Form 8995 L9', value: reitPtpComponent, computed: true },
+        { name: 'qbid_amount', label: 'QBI deduction before income limit', formLine: 'Form 8995 L10', value: qbidAmount, emphasis: true },
+      ],
+    },
+    {
+      title: 'Income limit and final QBID',
+      caption: 'Form 8995 Lines 11–15 / Form 8995-A Part IV',
+      rows: [
         { name: 'taxable_income_less_qbid', label: 'Taxable income (before QBID)', formLine: 'Form 8995 L11', value: tiBefore },
         { name: 'adjusted_net_capital_gain', label: 'Net capital gain + qualified dividends', formLine: 'Form 8995 L12', value: netCapGain },
-        { label: 'Income limit = 20% × max(0, TI − net capital gain)', formLine: 'Form 8995 L14', value: tiCap, computed: true },
-        { label: 'Final QBID = min(QBI deduction, income limit)', formLine: 'Form 8995 L15', value: Math.min(qbidAmount, tiCap), emphasis: true },
+        { label: 'TI − net capital gain', formLine: 'Form 8995 L13', value: tiLessCapGain, computed: true },
+        { label: '20% × (TI − net capital gain) = income limit', formLine: 'Form 8995 L14', value: incomeLimit, computed: true },
+        { label: 'Final QBID = min(QBI deduction, income limit)', formLine: 'Form 8995 L15', value: finalQbid, emphasis: true },
       ],
     },
     {
