@@ -128,9 +128,11 @@ const num = (outputs: Outputs, name: string): number => {
 interface StageRow {
   name?: string; // PolicyEngine variable name (omitted for computed rows)
   label: string;
+  formLine?: string; // e.g. "Form 8995 L10"
   value: number;
   negative?: boolean; // Display with leading minus
   computed?: boolean; // Derived client-side, not from PE
+  emphasis?: boolean; // Render as a final/result row
 }
 
 interface Stage {
@@ -168,14 +170,13 @@ function buildStages(outputs: Outputs): Stage[] {
     },
     {
       title: 'QBID computation',
-      caption: '20% × QBI, capped by 20% of (taxable income − net capital gain)',
-      total: Math.min(qbidAmount, tiCap),
-      totalLabel: 'Final QBID',
+      caption: 'Form 8995 Lines 10–15 / Form 8995-A Part IV',
       rows: [
-        { name: 'qbid_amount', label: 'Per-person QBID (after wage/SSTB rules, before TI cap)', value: qbidAmount },
-        { name: 'taxable_income_less_qbid', label: 'Taxable income (before QBID)', value: tiBefore },
-        { name: 'adjusted_net_capital_gain', label: 'Net capital gain + qualified dividends', value: netCapGain },
-        { label: 'TI cap = 20% × max(0, TI − net capital gain)', value: tiCap, computed: true },
+        { name: 'qbid_amount', label: 'QBI deduction before income limit', formLine: 'Form 8995 L10', value: qbidAmount },
+        { name: 'taxable_income_less_qbid', label: 'Taxable income (before QBID)', formLine: 'Form 8995 L11', value: tiBefore },
+        { name: 'adjusted_net_capital_gain', label: 'Net capital gain + qualified dividends', formLine: 'Form 8995 L12', value: netCapGain },
+        { label: 'Income limit = 20% × max(0, TI − net capital gain)', formLine: 'Form 8995 L14', value: tiCap, computed: true },
+        { label: 'Final QBID = min(QBI deduction, income limit)', formLine: 'Form 8995 L15', value: Math.min(qbidAmount, tiCap), emphasis: true },
       ],
     },
     {
@@ -215,21 +216,25 @@ function BreakdownStaged({ outputs }: { outputs: Outputs }) {
             {stage.rows.map((row, idx) => {
               const display = row.negative ? -Math.abs(row.value) : row.value;
               const isZero = row.value === 0;
+              const dim = isZero && !row.emphasis;
               return (
                 <div
                   key={row.name ?? `computed-${idx}`}
-                  className={`flex items-baseline justify-between gap-4 px-5 py-2.5 ${isZero ? 'opacity-50' : ''}`}
+                  className={`flex items-baseline justify-between gap-4 px-5 py-2.5 ${dim ? 'opacity-50' : ''} ${row.emphasis ? 'bg-pe-teal-50/40' : ''}`}
                   title={row.name}
                 >
                   <div className="min-w-0">
-                    <span className="text-sm text-pe-text-primary">{row.label}</span>
-                    {row.computed && (
+                    <span className={`text-sm ${row.emphasis ? 'font-semibold' : ''} text-pe-text-primary`}>{row.label}</span>
+                    {row.formLine && (
+                      <span className="ml-2 text-[10px] text-pe-text-tertiary font-mono">{row.formLine}</span>
+                    )}
+                    {row.computed && !row.emphasis && (
                       <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded bg-pe-gray-100 text-[10px] uppercase tracking-wider text-pe-text-tertiary">
                         derived
                       </span>
                     )}
                   </div>
-                  <span className={`text-base font-medium tabular-nums whitespace-nowrap ${display < 0 ? 'text-pe-error' : 'text-pe-text-primary'}`}>
+                  <span className={`tabular-nums whitespace-nowrap ${row.emphasis ? 'text-lg font-semibold text-pe-teal-600' : 'text-base font-medium'} ${!row.emphasis && display < 0 ? 'text-pe-error' : ''} ${!row.emphasis && display >= 0 ? 'text-pe-text-primary' : ''}`}>
                     {display < 0 ? `−${formatCurrency(Math.abs(display))}` : formatCurrency(display)}
                   </span>
                 </div>
