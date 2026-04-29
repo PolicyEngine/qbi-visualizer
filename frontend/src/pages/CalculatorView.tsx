@@ -132,7 +132,6 @@ interface StageRow {
   formLine?: string; // e.g. "Form 8995 L10"
   value: number;
   negative?: boolean; // Display with leading minus
-  computed?: boolean; // Derived client-side, not from PE
   emphasis?: boolean; // Render as a final/result row
 }
 
@@ -186,12 +185,12 @@ function buildStages(outputs: Outputs): Stage[] {
       title: 'QBI components (Form 8995 L5 + L9)',
       caption: '20% applied to Total QBI and to REIT/PTP income; per-business wage/UBIA caps and SSTB phase-out reduce the QBI side above the threshold (Form 8995-A Part II/III)',
       rows: [
-        { label: '20% × Total QBI (no limits)', formLine: 'Form 8995 L5', value: qbiComponentMax, computed: true },
+        { label: '20% × Total QBI (no limits)', formLine: 'Form 8995 L5', value: qbiComponentMax },
         ...(reductionFromCaps > 0
-          ? [{ label: '− Wage/UBIA cap and SSTB phase-out (§199A(b)(2), (d)(3))', value: reductionFromCaps, negative: true, computed: true } as StageRow]
+          ? [{ label: '− Wage/UBIA cap and SSTB phase-out (§199A(b)(2), (d)(3))', value: reductionFromCaps, negative: true } as StageRow]
           : []),
         { name: 'qualified_reit_and_ptp_income', label: 'Qualified REIT/PTP income', formLine: 'Form 8995 L6', value: reitPtp },
-        { label: '20% × REIT/PTP = REIT/PTP component', formLine: 'Form 8995 L9', value: reitPtpComponent, computed: true },
+        { label: '20% × REIT/PTP = REIT/PTP component', formLine: 'Form 8995 L9', value: reitPtpComponent },
         { name: 'qbid_amount', label: 'QBI deduction before income limit', formLine: 'Form 8995 L10', value: qbidAmount, emphasis: true },
       ],
     },
@@ -201,8 +200,8 @@ function buildStages(outputs: Outputs): Stage[] {
       rows: [
         { name: 'taxable_income_less_qbid', label: 'Taxable income (before QBID)', formLine: 'Form 8995 L11', value: tiBefore },
         { name: 'adjusted_net_capital_gain', label: 'Net capital gain + qualified dividends', formLine: 'Form 8995 L12', value: netCapGain },
-        { label: 'TI − net capital gain', formLine: 'Form 8995 L13', value: tiLessCapGain, computed: true },
-        { label: '20% × (TI − net capital gain) = income limit', formLine: 'Form 8995 L14', value: incomeLimit, computed: true },
+        { label: 'TI − net capital gain', formLine: 'Form 8995 L13', value: tiLessCapGain },
+        { label: '20% × (TI − net capital gain) = income limit', formLine: 'Form 8995 L14', value: incomeLimit },
         { label: 'Final QBID = min(QBI deduction, income limit)', formLine: 'Form 8995 L15', value: finalQbid, emphasis: true },
       ],
     },
