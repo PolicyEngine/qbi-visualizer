@@ -271,7 +271,15 @@ def _build_section_b3_phaseout(variables: Dict, parameters: Dict) -> LawSection:
         id="sec_b3_phaseout",
         section_number="199A(b)(3)",
         title="Phase-In of Wage/Property Limitation",
-        description="The W-2 wage limitation phases in above the threshold over a fixed range. Below threshold: no limitation. In phase-in range: partial limitation. Above phase-in: full limitation. Range: $50,000 single / $100,000 joint pre-2026; expanded to $75,000 / $150,000 starting 2026 under the One Big Beautiful Bill Act.",
+        description=(
+            "The W-2 wage limitation phases in above the threshold over a fixed range. "
+            "Below threshold: no limitation. In phase-in range: partial limitation. "
+            "Above phase-in: full limitation. "
+            f"Range: ${int(pe.qbi_phase_out_length('SINGLE', 2025)):,} single / "
+            f"${int(pe.qbi_phase_out_length('JOINT', 2025)):,} joint pre-2026; "
+            f"expanded to ${int(pe.qbi_phase_out_length('SINGLE', 2026)):,} / "
+            f"${int(pe.qbi_phase_out_length('JOINT', 2026)):,} starting 2026 under the One Big Beautiful Bill Act."
+        ),
         legal_reference=LegalReference(
             section="199A(b)(3)",
             title="Modifications to limitation based on W-2 wages",
