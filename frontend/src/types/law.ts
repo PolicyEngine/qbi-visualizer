@@ -14,9 +14,6 @@ export interface InputVariable {
   label: string;
   description?: string;
   unit?: string;
-  default_value?: number;
-  current_value?: number;
-  github_url?: string;
 }
 
 export interface Parameter {
@@ -26,7 +23,6 @@ export interface Parameter {
   unit?: string;
   year?: number;
   filing_status?: string;
-  github_url?: string;
 }
 
 export interface ComputationStep {
@@ -37,16 +33,6 @@ export interface ComputationStep {
   inputs: string[];
   output?: string;
   code_reference?: string;
-  github_url?: string;
-}
-
-export interface DecisionPoint {
-  id: string;
-  condition: string;
-  condition_formula?: string;
-  true_branch: string;
-  false_branch: string;
-  threshold_values?: Record<string, number>;
 }
 
 export interface LawSection {
@@ -60,14 +46,8 @@ export interface LawSection {
   inputs: InputVariable[];
   parameters: Parameter[];
   steps: ComputationStep[];
-  decisions: DecisionPoint[];
   variables_used: string[];
-  formula_source?: string;
   github_url?: string;
-  next_sections: string[];
-  depends_on: string[];
-  is_adjacent?: boolean;
-  parent_section?: string;
 }
 
 export interface AdjacentSection {
@@ -95,8 +75,5 @@ export interface QBIDLawStructure {
   missing_sections: number;
   sections: LawSection[];
   adjacent_sections: AdjacentSection[];
-  computation_order: string[];
   policyengine_commit?: string;
-  last_updated?: string;
 }
-

@@ -9,7 +9,6 @@ from app.models.law_structure import (
     InputVariable,
     Parameter,
     ComputationStep,
-    DecisionPoint,
     AdjacentSection,
 )
 
@@ -55,16 +54,6 @@ def build_qbid_law_structure(
         missing_sections=missing,
         sections=sections,
         adjacent_sections=adjacent_sections,
-        computation_order=[
-            "sec_c_qbi_definition",
-            "sec_c2_loss_carryover",
-            "sec_b2_wage_limitation",
-            "sec_b3_phaseout",
-            "sec_d2_sstb",
-            "sec_b1_combined_qbi",
-            "sec_a_allowance",
-            "sec_i_minimum",
-        ],
         policyengine_commit=commit_sha,
     )
 
@@ -129,8 +118,6 @@ def _build_section_a_allowance(variables: Dict, parameters: Dict) -> LawSection:
         ],
         variables_used=["qualified_business_income_deduction", "taxable_income_less_qbid", "adjusted_net_capital_gain"],
         github_url=f"{GITHUB_BASE}/policyengine_us/variables/gov/irs/income/taxable_income/deductions/qualified_business_income_deduction/qualified_business_income_deduction.py",
-        next_sections=[],
-        depends_on=["sec_b1_combined_qbi"],
     )
 
 
@@ -195,8 +182,6 @@ def _build_section_b1_combined_qbi(variables: Dict, parameters: Dict) -> LawSect
         ],
         variables_used=["qbid_amount", "qualified_reit_and_ptp_income", "qualified_business_income_deduction"],
         github_url=f"{GITHUB_BASE}/policyengine_us/variables/gov/irs/income/taxable_income/deductions/qualified_business_income_deduction/qualified_business_income_deduction.py",
-        next_sections=["sec_a_allowance"],
-        depends_on=["sec_b2_wage_limitation", "sec_b3_phaseout", "sec_d2_sstb"],
     )
 
 
@@ -274,20 +259,8 @@ def _build_section_b2_wage_limitation(variables: Dict, parameters: Dict) -> LawS
                 output="full_cap"
             ),
         ],
-        decisions=[
-            DecisionPoint(
-                id="dec_b2_apply",
-                condition="Is taxable income above the threshold?",
-                condition_formula="taxable_income > threshold",
-                true_branch="Apply wage/property limitation",
-                false_branch="No limitation - use full 20% × QBI",
-                threshold_values={"SINGLE": 197300, "JOINT": 394600}
-            )
-        ],
         variables_used=["qbid_amount", "w2_wages_from_qualified_business", "unadjusted_basis_qualified_property"],
         github_url=f"{GITHUB_BASE}/policyengine_us/variables/gov/irs/income/taxable_income/deductions/qualified_business_income_deduction/qbid_amount.py",
-        next_sections=["sec_b1_combined_qbi"],
-        depends_on=["sec_c_qbi_definition", "sec_e_thresholds"],
     )
 
 
@@ -363,20 +336,8 @@ def _build_section_b3_phaseout(variables: Dict, parameters: Dict) -> LawSection:
                 output="phased_qbid"
             ),
         ],
-        decisions=[
-            DecisionPoint(
-                id="dec_b3_range",
-                condition="Where is income relative to threshold?",
-                condition_formula="taxable_income vs threshold",
-                true_branch="Below threshold: No limitation",
-                false_branch="In range: Partial | Above: Full limitation",
-                threshold_values={"SINGLE": 197300, "JOINT": 394600}
-            )
-        ],
         variables_used=["qbid_amount", "taxable_income_less_qbid", "filing_status"],
         github_url=f"{GITHUB_BASE}/policyengine_us/variables/gov/irs/income/taxable_income/deductions/qualified_business_income_deduction/qbid_amount.py",
-        next_sections=["sec_b1_combined_qbi"],
-        depends_on=["sec_b2_wage_limitation", "sec_e_thresholds"],
     )
 
 
@@ -465,8 +426,6 @@ def _build_section_c_qbi_definition(variables: Dict, parameters: Dict) -> LawSec
         ],
         variables_used=["qualified_business_income"],
         github_url=f"{GITHUB_BASE}/policyengine_us/variables/gov/irs/income/taxable_income/deductions/qualified_business_income_deduction/qualified_business_income.py",
-        next_sections=["sec_b2_wage_limitation"],
-        depends_on=[],
     )
 
 
@@ -500,8 +459,6 @@ def _build_section_c2_loss_carryover(variables: Dict, parameters: Dict) -> LawSe
             ),
         ],
         variables_used=["qualified_business_income"],
-        next_sections=["sec_b2_wage_limitation"],
-        depends_on=["sec_c_qbi_definition"],
     )
 
 
@@ -538,8 +495,6 @@ def _build_section_c3_exclusions(variables: Dict, parameters: Dict) -> LawSectio
             ),
         ],
         variables_used=[],
-        next_sections=["sec_c_qbi_definition"],
-        depends_on=[],
     )
 
 
@@ -572,8 +527,6 @@ def _build_section_d_qualified_business(variables: Dict, parameters: Dict) -> La
         ],
         variables_used=["business_is_qualified"],
         github_url=f"{GITHUB_BASE}/policyengine_us/variables/household/income/person/self_employment/business_is_qualified.py",
-        next_sections=["sec_c_qbi_definition"],
-        depends_on=[],
     )
 
 
@@ -621,19 +574,8 @@ def _build_section_d2_sstb(variables: Dict, parameters: Dict) -> LawSection:
                 output="adj_qbid_max"
             ),
         ],
-        decisions=[
-            DecisionPoint(
-                id="dec_d2_sstb",
-                condition="Is this a Specified Service Trade or Business?",
-                condition_formula="business_is_sstb == True",
-                true_branch="Apply SSTB phase-out (0% above threshold + range)",
-                false_branch="No SSTB reduction"
-            )
-        ],
         variables_used=["business_is_sstb", "qbid_amount"],
         github_url=f"{GITHUB_BASE}/policyengine_us/variables/household/income/person/self_employment/business_is_sstb.py",
-        next_sections=["sec_b1_combined_qbi"],
-        depends_on=["sec_b3_phaseout"],
     )
 
 
@@ -679,8 +621,6 @@ def _build_section_e_thresholds(variables: Dict, parameters: Dict) -> LawSection
         ],
         variables_used=["filing_status", "taxable_income_less_qbid"],
         github_url=f"{GITHUB_BASE}/policyengine_us/parameters/gov/irs/deductions/qbi/phase_out/start.yaml",
-        next_sections=["sec_b2_wage_limitation", "sec_b3_phaseout"],
-        depends_on=[],
     )
 
 
@@ -732,8 +672,6 @@ def _build_section_i_minimum_deduction(variables: Dict, parameters: Dict) -> Law
         ],
         variables_used=["qualified_business_income_deduction"],
         github_url=f"{GITHUB_BASE}/policyengine_us/parameters/gov/irs/deductions/qbi/deduction_floor/",
-        next_sections=[],
-        depends_on=["sec_a_allowance"],
     )
 
 
@@ -753,8 +691,6 @@ def _build_section_g_cooperatives(variables: Dict, parameters: Dict) -> LawSecti
         status=ImplementationStatus.MISSING,
         status_notes="Cooperative provisions are NOT implemented in PolicyEngine",
         variables_used=[],
-        next_sections=[],
-        depends_on=[],
     )
 
 
