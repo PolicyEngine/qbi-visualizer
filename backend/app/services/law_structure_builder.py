@@ -11,6 +11,7 @@ from app.models.law_structure import (
     ComputationStep,
     AdjacentSection,
 )
+from app.services import pe_parameters as pe
 
 
 GITHUB_BASE = "https://github.com/PolicyEngine/policyengine-us/blob/master"
@@ -94,7 +95,7 @@ def _build_section_a_allowance(variables: Dict, parameters: Dict) -> LawSection:
             Parameter(
                 name="gov.irs.deductions.qbi.max.rate",
                 label="QBID Rate",
-                value=0.20,
+                value=pe.qbi_max_rate(),
                 unit="rate"
             )
         ],
@@ -153,7 +154,7 @@ def _build_section_b1_combined_qbi(variables: Dict, parameters: Dict) -> LawSect
             Parameter(
                 name="gov.irs.deductions.qbi.max.reit_ptp_rate",
                 label="REIT/PTP Deduction Rate",
-                value=0.20,
+                value=pe.qbi_reit_ptp_rate(),
                 unit="rate"
             ),
         ],
@@ -217,19 +218,19 @@ def _build_section_b2_wage_limitation(variables: Dict, parameters: Dict) -> LawS
             Parameter(
                 name="gov.irs.deductions.qbi.max.w2_wages.rate",
                 label="W-2 Wage Rate (primary)",
-                value=0.50,
+                value=pe.qbi_w2_wages_rate(),
                 unit="rate"
             ),
             Parameter(
                 name="gov.irs.deductions.qbi.max.w2_wages.alt_rate",
                 label="W-2 Wage Rate (alternative)",
-                value=0.25,
+                value=pe.qbi_w2_wages_alt_rate(),
                 unit="rate"
             ),
             Parameter(
                 name="gov.irs.deductions.qbi.max.business_property.rate",
                 label="Property Basis Rate",
-                value=0.025,
+                value=pe.qbi_business_property_rate(),
                 unit="rate"
             ),
         ],
@@ -281,34 +282,34 @@ def _build_section_b3_phaseout(variables: Dict, parameters: Dict) -> LawSection:
         parameters=[
             Parameter(
                 name="gov.irs.deductions.qbi.phase_out.start",
-                label="Phase-out Start (Single)",
-                value=197300,
+                label=f"Phase-out Start (Single, {pe.DEFAULT_YEAR})",
+                value=pe.qbi_threshold("SINGLE"),
                 unit="USD",
-                year=2025,
+                year=pe.DEFAULT_YEAR,
                 filing_status="SINGLE"
             ),
             Parameter(
                 name="gov.irs.deductions.qbi.phase_out.start",
-                label="Phase-out Start (Joint)",
-                value=394600,
+                label=f"Phase-out Start (Joint, {pe.DEFAULT_YEAR})",
+                value=pe.qbi_threshold("JOINT"),
                 unit="USD",
-                year=2025,
+                year=pe.DEFAULT_YEAR,
                 filing_status="JOINT"
             ),
             Parameter(
                 name="gov.irs.deductions.qbi.phase_out.length",
-                label="2025 Phase-out Range (Single) — pre-OBBBA",
-                value=50000,
+                label=f"Phase-out Range (Single, {pe.DEFAULT_YEAR})",
+                value=pe.qbi_phase_out_length("SINGLE"),
                 unit="USD",
-                year=2025,
+                year=pe.DEFAULT_YEAR,
                 filing_status="SINGLE"
             ),
             Parameter(
                 name="gov.irs.deductions.qbi.phase_out.length",
-                label="2025 Phase-out Range (Joint) — pre-OBBBA",
-                value=100000,
+                label=f"Phase-out Range (Joint, {pe.DEFAULT_YEAR})",
+                value=pe.qbi_phase_out_length("JOINT"),
                 unit="USD",
-                year=2025,
+                year=pe.DEFAULT_YEAR,
                 filing_status="JOINT"
             ),
         ],
@@ -596,26 +597,26 @@ def _build_section_e_thresholds(variables: Dict, parameters: Dict) -> LawSection
         parameters=[
             Parameter(
                 name="gov.irs.deductions.qbi.phase_out.start",
-                label="2025 Threshold (Single/HoH)",
-                value=197300,
+                label=f"{pe.DEFAULT_YEAR} Threshold (Single/HoH)",
+                value=pe.qbi_threshold("SINGLE"),
                 unit="USD",
-                year=2025,
+                year=pe.DEFAULT_YEAR,
                 filing_status="SINGLE"
             ),
             Parameter(
                 name="gov.irs.deductions.qbi.phase_out.start",
-                label="2025 Threshold (Joint)",
-                value=394600,
+                label=f"{pe.DEFAULT_YEAR} Threshold (Joint)",
+                value=pe.qbi_threshold("JOINT"),
                 unit="USD",
-                year=2025,
+                year=pe.DEFAULT_YEAR,
                 filing_status="JOINT"
             ),
             Parameter(
                 name="gov.irs.deductions.qbi.phase_out.start",
-                label="2025 Threshold (MFS)",
-                value=197300,
+                label=f"{pe.DEFAULT_YEAR} Threshold (MFS)",
+                value=pe.qbi_threshold("SEPARATE"),
                 unit="USD",
-                year=2025,
+                year=pe.DEFAULT_YEAR,
                 filing_status="SEPARATE"
             ),
         ],
