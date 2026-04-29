@@ -7,8 +7,6 @@ import {
   FormImplementationStatus,
 } from '../types/taxForm';
 
-const API_BASE = 'http://localhost:8000';
-
 type TabType = 'overview' | 'form8995' | 'form8995a' | 'gaps';
 
 function TaxFormView() {
@@ -23,7 +21,7 @@ function TaxFormView() {
 
   const fetchFormMapping = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/forms/mapping`);
+      const res = await fetch('/api/forms/mapping');
       if (!res.ok) throw new Error('Failed to fetch form mapping');
       const result = await res.json();
       setData(result);
@@ -36,15 +34,15 @@ function TaxFormView() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-slate-500">Loading tax form mapping...</div>
+      <div className="flex items-center justify-center h-full bg-pe-gray-50">
+        <div className="text-pe-text-tertiary">Loading tax form mapping...</div>
       </div>
     );
   }
 
   if (error || !data) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex items-center justify-center h-full bg-pe-gray-50">
         <div className="text-red-500">Error: {error}</div>
       </div>
     );
@@ -54,18 +52,18 @@ function TaxFormView() {
   const form8995a = data.forms.find((f) => f.form_number === '8995-A');
 
   return (
-    <div className="h-full flex flex-col bg-slate-50">
+    <div className="h-full flex flex-col bg-pe-gray-50">
       {/* Tab navigation */}
-      <div className="bg-white border-b border-slate-200 px-6 py-2">
-        <nav className="flex gap-6">
+      <div className="bg-white border-b border-pe-gray-200 px-6">
+        <nav className="flex gap-8">
           {(['overview', 'form8995', 'form8995a', 'gaps'] as TabType[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`py-2 px-1 text-sm font-medium border-b-2 transition-colors ${
+              className={`py-4 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === tab
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-700'
+                  ? 'border-pe-text-primary text-pe-text-primary'
+                  : 'border-transparent text-pe-text-tertiary hover:text-pe-text-secondary hover:border-pe-gray-300'
               }`}
             >
               {tab === 'overview' && 'Overview'}
@@ -91,20 +89,20 @@ function TaxFormView() {
 // Status badge component
 function StatusBadge({ status }: { status: FormImplementationStatus }) {
   const styles = {
-    complete: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-    partial: 'bg-amber-100 text-amber-700 border-amber-200',
-    missing: 'bg-red-100 text-red-700 border-red-200',
-    not_applicable: 'bg-slate-100 text-slate-500 border-slate-200',
+    complete: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    partial: 'bg-amber-50 text-amber-700 border-amber-200',
+    missing: 'bg-red-50 text-red-700 border-red-200',
+    not_applicable: 'bg-pe-gray-50 text-pe-text-tertiary border-pe-gray-200',
   };
-  const icons = {
-    complete: '✓',
-    partial: '◐',
-    missing: '✗',
-    not_applicable: '—',
+  const labels = {
+    complete: 'Complete',
+    partial: 'Partial',
+    missing: 'Missing',
+    not_applicable: 'N/A',
   };
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border ${styles[status]}`}>
-      {icons[status]} {status}
+    <span className={`inline-flex items-center px-2.5 py-1 rounded-pe-md text-xs font-medium border ${styles[status]}`}>
+      {labels[status]}
     </span>
   );
 }
@@ -115,9 +113,9 @@ function OverviewTab({ data }: { data: FormMappingResponse }) {
     <div className="h-full overflow-y-auto p-6">
       <div className="max-w-5xl mx-auto space-y-6">
         {/* Header */}
-        <div className="bg-white rounded-lg border border-slate-200 p-6">
-          <h2 className="text-xl font-semibold text-slate-900 mb-2">IRS Form to PolicyEngine Mapping</h2>
-          <p className="text-slate-600">
+        <div className="bg-white rounded-pe-lg border border-pe-gray-200 p-6">
+          <h2 className="text-xl font-semibold text-pe-text-primary mb-2">IRS Form to PolicyEngine Mapping</h2>
+          <p className="text-pe-text-secondary">
             Cross-reference of IRS Form 8995 and Form 8995-A with PolicyEngine's QBID implementation.
             This shows which form lines are correctly implemented, partially implemented, or missing.
           </p>
@@ -125,67 +123,67 @@ function OverviewTab({ data }: { data: FormMappingResponse }) {
 
         {/* Summary Stats */}
         <div className="grid grid-cols-5 gap-4">
-          <div className="bg-white rounded-lg border border-slate-200 p-4 text-center">
-            <div className="text-3xl font-bold text-slate-900">{data.summary.total_elements}</div>
-            <div className="text-sm text-slate-500">Total Elements</div>
+          <div className="bg-white rounded-pe-lg border border-pe-gray-200 p-4 text-center">
+            <div className="text-3xl font-bold text-pe-text-primary">{data.summary.total_elements}</div>
+            <div className="text-sm text-pe-text-tertiary">Total Elements</div>
           </div>
-          <div className="bg-emerald-50 rounded-lg border border-emerald-200 p-4 text-center">
+          <div className="bg-emerald-50 rounded-pe-lg border border-emerald-200 p-4 text-center">
             <div className="text-3xl font-bold text-emerald-600">{data.summary.complete}</div>
             <div className="text-sm text-emerald-700">Complete</div>
           </div>
-          <div className="bg-amber-50 rounded-lg border border-amber-200 p-4 text-center">
+          <div className="bg-amber-50 rounded-pe-lg border border-amber-200 p-4 text-center">
             <div className="text-3xl font-bold text-amber-600">{data.summary.partial}</div>
             <div className="text-sm text-amber-700">Partial</div>
           </div>
-          <div className="bg-red-50 rounded-lg border border-red-200 p-4 text-center">
+          <div className="bg-red-50 rounded-pe-lg border border-red-200 p-4 text-center">
             <div className="text-3xl font-bold text-red-600">{data.summary.missing}</div>
             <div className="text-sm text-red-700">Missing</div>
           </div>
-          <div className="bg-blue-50 rounded-lg border border-blue-200 p-4 text-center">
-            <div className="text-3xl font-bold text-blue-600">{data.summary.implementation_pct}%</div>
-            <div className="text-sm text-blue-700">Implemented</div>
+          <div className="bg-pe-teal-50 rounded-pe-lg border border-pe-teal-200 p-4 text-center">
+            <div className="text-3xl font-bold text-pe-teal-600">{data.summary.implementation_pct}%</div>
+            <div className="text-sm text-pe-teal-700">Implemented</div>
           </div>
         </div>
 
         {/* Forms Summary */}
         <div className="grid grid-cols-2 gap-6">
           {data.forms.map((form) => (
-            <div key={form.form_number} className="bg-white rounded-lg border border-slate-200 overflow-hidden">
-              <div className="px-6 py-4 bg-slate-50 border-b border-slate-200">
+            <div key={form.form_number} className="bg-white rounded-pe-lg border border-pe-gray-200 overflow-hidden">
+              <div className="px-6 py-4 bg-pe-gray-50 border-b border-pe-gray-200">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="font-semibold text-slate-900">Form {form.form_number}</h3>
-                    <p className="text-sm text-slate-500">{form.form_title}</p>
+                    <h3 className="font-semibold text-pe-text-primary">Form {form.form_number}</h3>
+                    <p className="text-sm text-pe-text-tertiary">{form.form_title}</p>
                   </div>
                   <a
                     href={form.irs_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-sm text-blue-600 hover:underline"
+                    className="text-sm text-pe-teal-600 hover:text-pe-teal-700 hover:underline"
                   >
                     View Form
                   </a>
                 </div>
               </div>
               <div className="p-6">
-                <p className="text-sm text-slate-600 mb-4">{form.who_can_use}</p>
+                <p className="text-sm text-pe-text-secondary mb-4">{form.who_can_use}</p>
 
                 <div className="grid grid-cols-3 gap-3 mb-4">
-                  <div className="text-center p-2 bg-emerald-50 rounded">
+                  <div className="text-center p-2 bg-emerald-50 rounded-pe-md">
                     <div className="text-lg font-semibold text-emerald-600">{form.complete_lines}</div>
                     <div className="text-xs text-emerald-700">Complete</div>
                   </div>
-                  <div className="text-center p-2 bg-amber-50 rounded">
+                  <div className="text-center p-2 bg-amber-50 rounded-pe-md">
                     <div className="text-lg font-semibold text-amber-600">{form.partial_lines}</div>
                     <div className="text-xs text-amber-700">Partial</div>
                   </div>
-                  <div className="text-center p-2 bg-red-50 rounded">
+                  <div className="text-center p-2 bg-red-50 rounded-pe-md">
                     <div className="text-lg font-semibold text-red-600">{form.missing_lines}</div>
                     <div className="text-xs text-red-700">Missing</div>
                   </div>
                 </div>
 
-                <div className="text-sm text-slate-500">
+                <div className="text-sm text-pe-text-tertiary">
                   <div>Thresholds (2024):</div>
                   <div className="font-mono">
                     Single: ${form.threshold_single.toLocaleString()} | Joint: ${form.threshold_joint.toLocaleString()}
@@ -197,19 +195,19 @@ function OverviewTab({ data }: { data: FormMappingResponse }) {
         </div>
 
         {/* What's Working */}
-        <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
-          <div className="px-6 py-4 bg-emerald-50 border-b border-slate-200">
-            <h3 className="font-semibold text-emerald-900">What's Working Correctly</h3>
+        <div className="bg-white rounded-pe-lg border border-pe-gray-200 overflow-hidden">
+          <div className="px-6 py-4 bg-emerald-50 border-b border-pe-gray-200">
+            <h3 className="font-semibold text-emerald-800">What's Working Correctly</h3>
           </div>
           <div className="p-6">
             <div className="grid grid-cols-2 gap-4">
               {data.working_correctly.map((item) => (
-                <div key={item.id} className="flex items-start gap-3 p-3 bg-emerald-50/50 rounded-lg">
+                <div key={item.id} className="flex items-start gap-3 p-3 bg-emerald-50/50 rounded-pe-md">
                   <span className="text-emerald-500 mt-0.5">✓</span>
                   <div>
-                    <div className="font-medium text-slate-900">{item.title}</div>
-                    <div className="text-sm text-slate-600">{item.description}</div>
-                    <div className="text-xs text-slate-400 mt-1">{item.form_lines}</div>
+                    <div className="font-medium text-pe-text-primary">{item.title}</div>
+                    <div className="text-sm text-pe-text-secondary">{item.description}</div>
+                    <div className="text-xs text-pe-text-tertiary mt-1">{item.form_lines}</div>
                   </div>
                 </div>
               ))}
@@ -229,19 +227,19 @@ function FormDetailTab({ form }: { form: TaxFormMapping }) {
     <div className="h-full overflow-y-auto p-6">
       <div className="max-w-5xl mx-auto space-y-6">
         {/* Form Header */}
-        <div className="bg-white rounded-lg border border-slate-200 p-6">
+        <div className="bg-white rounded-pe-lg border border-pe-gray-200 p-6">
           <div className="flex items-start justify-between">
             <div>
-              <h2 className="text-xl font-semibold text-slate-900">Form {form.form_number}</h2>
-              <p className="text-slate-600">{form.form_title}</p>
-              <p className="text-sm text-slate-500 mt-2">{form.description}</p>
+              <h2 className="text-xl font-semibold text-pe-text-primary">Form {form.form_number}</h2>
+              <p className="text-pe-text-secondary">{form.form_title}</p>
+              <p className="text-sm text-pe-text-tertiary mt-2">{form.description}</p>
             </div>
             <div className="flex gap-2">
               <a
                 href={form.irs_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded text-sm font-medium hover:bg-blue-200"
+                className="px-3 py-1.5 bg-pe-teal-50 text-pe-teal-700 rounded-pe-md text-sm font-medium hover:bg-pe-teal-100"
               >
                 View Form PDF
               </a>
@@ -249,7 +247,7 @@ function FormDetailTab({ form }: { form: TaxFormMapping }) {
                 href={form.instructions_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-3 py-1.5 bg-slate-100 text-slate-700 rounded text-sm font-medium hover:bg-slate-200"
+                className="px-3 py-1.5 bg-pe-gray-100 text-pe-text-secondary rounded-pe-md text-sm font-medium hover:bg-pe-gray-200"
               >
                 Instructions
               </a>
@@ -258,11 +256,11 @@ function FormDetailTab({ form }: { form: TaxFormMapping }) {
         </div>
 
         {/* Line-by-Line Mapping */}
-        <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
-          <div className="px-6 py-4 bg-slate-50 border-b border-slate-200">
-            <h3 className="font-semibold text-slate-900">Line-by-Line Mapping</h3>
+        <div className="bg-white rounded-pe-lg border border-pe-gray-200 overflow-hidden">
+          <div className="px-6 py-4 bg-pe-gray-50 border-b border-pe-gray-200">
+            <h3 className="font-semibold text-pe-text-primary">Line-by-Line Mapping</h3>
           </div>
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-pe-gray-100">
             {form.lines.map((line) => (
               <LineRow
                 key={line.line_number}
@@ -277,7 +275,7 @@ function FormDetailTab({ form }: { form: TaxFormMapping }) {
         {/* Schedules */}
         {form.schedules.length > 0 && (
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-slate-900">Schedules</h3>
+            <h3 className="text-lg font-semibold text-pe-text-primary">Schedules</h3>
             {form.schedules.map((schedule) => (
               <ScheduleCard key={schedule.schedule_id} schedule={schedule} />
             ))}
@@ -303,53 +301,52 @@ function LineRow({
 
   return (
     <div className={`group ${isMissing ? 'bg-red-50/30' : ''}`}>
-      <button onClick={onToggle} className="w-full px-6 py-4 flex items-center gap-4 hover:bg-slate-50 text-left">
-        <div className="w-20 font-mono text-sm text-slate-500 shrink-0">{line.line_number}</div>
+      <button onClick={onToggle} className="w-full px-6 py-4 flex items-center gap-4 hover:bg-pe-gray-50 text-left">
+        <div className="w-20 font-mono text-sm text-pe-text-tertiary shrink-0">{line.line_number}</div>
         <div className="flex-1 min-w-0">
-          <div className="font-medium text-slate-900 truncate">{line.line_label}</div>
-          <div className="text-sm text-slate-500 truncate">{line.description}</div>
-          {/* Show gap description preview for missing/partial items */}
+          <div className="font-medium text-pe-text-primary truncate">{line.line_label}</div>
+          <div className="text-sm text-pe-text-tertiary truncate">{line.description}</div>
           {(isMissing || isPartial) && line.gap_description && (
             <div className={`text-xs mt-1 truncate ${isMissing ? 'text-red-600' : 'text-amber-600'}`}>
-              {isMissing ? '⚠ Missing: ' : '◐ Gap: '}{line.gap_description}
+              {isMissing ? 'Missing: ' : 'Gap: '}{line.gap_description}
             </div>
           )}
         </div>
         <StatusBadge status={line.status} />
-        <span className="text-slate-400 text-sm">{expanded ? '▼' : '▶'}</span>
+        <span className="text-pe-text-tertiary text-sm">{expanded ? '▼' : '▶'}</span>
       </button>
 
       {expanded && (
-        <div className="px-6 py-4 bg-slate-50 border-t border-slate-100">
+        <div className="px-6 py-4 bg-pe-gray-50 border-t border-pe-gray-100">
           <div className="grid grid-cols-2 gap-6">
             {/* IRS Instructions */}
             <div>
-              <h4 className="text-xs font-semibold text-slate-500 uppercase mb-2">IRS Instructions</h4>
-              <p className="text-sm text-slate-700">{line.form_instructions || 'No specific instructions'}</p>
+              <h4 className="text-xs font-semibold text-pe-text-tertiary uppercase mb-2">IRS Instructions</h4>
+              <p className="text-sm text-pe-text-secondary">{line.form_instructions || 'No specific instructions'}</p>
             </div>
 
             {/* PolicyEngine Implementation */}
             <div>
-              <h4 className="text-xs font-semibold text-slate-500 uppercase mb-2">PolicyEngine Implementation</h4>
+              <h4 className="text-xs font-semibold text-pe-text-tertiary uppercase mb-2">PolicyEngine Implementation</h4>
               {line.status === 'complete' && (
-                <div className="mb-2 p-2 bg-emerald-50 rounded border border-emerald-200">
-                  <p className="text-sm text-emerald-700">✓ Fully implemented</p>
+                <div className="mb-2 p-2 bg-emerald-50 rounded-pe-md border border-emerald-200">
+                  <p className="text-sm text-emerald-700">Fully implemented</p>
                 </div>
               )}
               {line.pe_variable && (
                 <div className="mb-2">
-                  <span className="text-xs text-slate-500">Variable: </span>
-                  <code className="text-xs bg-slate-200 px-1.5 py-0.5 rounded">{line.pe_variable}</code>
+                  <span className="text-xs text-pe-text-tertiary">Variable: </span>
+                  <code className="text-xs bg-pe-gray-200 px-1.5 py-0.5 rounded-pe-sm">{line.pe_variable}</code>
                 </div>
               )}
-              {line.pe_formula && <p className="text-sm text-slate-700 font-mono text-xs mb-2">{line.pe_formula}</p>}
+              {line.pe_formula && <p className="text-sm text-pe-text-secondary font-mono text-xs mb-2">{line.pe_formula}</p>}
               {isMissing && !line.pe_variable && (
-                <div className="mb-2 p-2 bg-red-50 rounded border border-red-200">
-                  <p className="text-sm text-red-700 font-medium">✗ Not implemented in PolicyEngine</p>
+                <div className="mb-2 p-2 bg-red-50 rounded-pe-md border border-red-200">
+                  <p className="text-sm text-red-700 font-medium">Not implemented in PolicyEngine</p>
                 </div>
               )}
               {line.gap_description && (
-                <div className={`mt-2 p-2 rounded border ${isMissing ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'}`}>
+                <div className={`mt-2 p-2 rounded-pe-md border ${isMissing ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'}`}>
                   <p className={`text-xs font-semibold uppercase mb-1 ${isMissing ? 'text-red-800' : 'text-amber-800'}`}>
                     {isMissing ? 'What\'s Missing' : 'Implementation Gap'}
                   </p>
@@ -369,45 +366,45 @@ function ScheduleCard({ schedule }: { schedule: FormScheduleMapping }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+    <div className="bg-white rounded-pe-lg border border-pe-gray-200 overflow-hidden">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-50"
+        className="w-full px-6 py-4 flex items-center justify-between hover:bg-pe-gray-50"
       >
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center font-semibold text-slate-600">
+          <div className="w-12 h-12 bg-pe-gray-100 rounded-pe-md flex items-center justify-center font-semibold text-pe-text-secondary">
             {schedule.schedule_id}
           </div>
           <div className="text-left">
-            <div className="font-medium text-slate-900">{schedule.schedule_name}</div>
-            <div className="text-sm text-slate-500">{schedule.description}</div>
+            <div className="font-medium text-pe-text-primary">{schedule.schedule_name}</div>
+            <div className="text-sm text-pe-text-tertiary">{schedule.description}</div>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <StatusBadge status={schedule.status} />
-          <span className="text-slate-400">{expanded ? '▼' : '▶'}</span>
+          <span className="text-pe-text-tertiary">{expanded ? '▼' : '▶'}</span>
         </div>
       </button>
 
       {expanded && (
-        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50">
+        <div className="px-6 py-4 border-t border-pe-gray-200 bg-pe-gray-50">
           <div className="mb-4">
-            <h4 className="text-xs font-semibold text-slate-500 uppercase mb-1">Who Must File</h4>
-            <p className="text-sm text-slate-700">{schedule.who_must_file}</p>
+            <h4 className="text-xs font-semibold text-pe-text-tertiary uppercase mb-1">Who Must File</h4>
+            <p className="text-sm text-pe-text-secondary">{schedule.who_must_file}</p>
           </div>
 
           <div className="mb-4">
-            <h4 className="text-xs font-semibold text-slate-500 uppercase mb-1">Implementation Status</h4>
-            <p className="text-sm text-slate-700">{schedule.status_notes}</p>
+            <h4 className="text-xs font-semibold text-pe-text-tertiary uppercase mb-1">Implementation Status</h4>
+            <p className="text-sm text-pe-text-secondary">{schedule.status_notes}</p>
           </div>
 
           {schedule.key_requirements.length > 0 && (
             <div className="mb-4">
-              <h4 className="text-xs font-semibold text-slate-500 uppercase mb-2">Key Requirements</h4>
+              <h4 className="text-xs font-semibold text-pe-text-tertiary uppercase mb-2">Key Requirements</h4>
               <ul className="space-y-1">
                 {schedule.key_requirements.map((req, i) => (
-                  <li key={i} className="text-sm text-slate-700 flex items-start gap-2">
-                    <span className="text-slate-400">•</span>
+                  <li key={i} className="text-sm text-pe-text-secondary flex items-start gap-2">
+                    <span className="text-pe-text-tertiary">•</span>
                     {req}
                   </li>
                 ))}
@@ -417,15 +414,15 @@ function ScheduleCard({ schedule }: { schedule: FormScheduleMapping }) {
 
           {schedule.lines.length > 0 && (
             <div>
-              <h4 className="text-xs font-semibold text-slate-500 uppercase mb-2">Lines</h4>
+              <h4 className="text-xs font-semibold text-pe-text-tertiary uppercase mb-2">Lines</h4>
               <div className="space-y-2">
                 {schedule.lines.map((line) => (
-                  <div key={line.line_number} className="p-3 bg-white rounded border border-slate-200">
+                  <div key={line.line_number} className="p-3 bg-white rounded-pe-md border border-pe-gray-200">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="font-mono text-sm text-slate-500">{line.line_number}</span>
+                      <span className="font-mono text-sm text-pe-text-tertiary">{line.line_number}</span>
                       <StatusBadge status={line.status} />
                     </div>
-                    <div className="text-sm font-medium text-slate-900">{line.line_label}</div>
+                    <div className="text-sm font-medium text-pe-text-primary">{line.line_label}</div>
                     {line.gap_description && (
                       <div className="text-sm text-red-600 mt-1">{line.gap_description}</div>
                     )}
@@ -446,9 +443,9 @@ function GapsTab({ data }: { data: FormMappingResponse }) {
     <div className="h-full overflow-y-auto p-6">
       <div className="max-w-5xl mx-auto space-y-6">
         {/* Header */}
-        <div className="bg-white rounded-lg border border-slate-200 p-6">
-          <h2 className="text-xl font-semibold text-slate-900 mb-2">Implementation Gaps & Recommended Fixes</h2>
-          <p className="text-slate-600">
+        <div className="bg-white rounded-pe-lg border border-pe-gray-200 p-6">
+          <h2 className="text-xl font-semibold text-pe-text-primary mb-2">Implementation Gaps & Recommended Fixes</h2>
+          <p className="text-pe-text-secondary">
             Priority list of missing features that should be added to PolicyEngine to fully support Form 8995/8995-A.
           </p>
         </div>
@@ -456,7 +453,7 @@ function GapsTab({ data }: { data: FormMappingResponse }) {
         {/* Critical Gaps */}
         <div className="space-y-4">
           {data.critical_gaps.map((gap, index) => (
-            <div key={gap.id} className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+            <div key={gap.id} className="bg-white rounded-pe-lg border border-pe-gray-200 overflow-hidden">
               <div className="px-6 py-4 bg-red-50 border-b border-red-100 flex items-center gap-4">
                 <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center text-red-600 font-semibold">
                   {index + 1}
@@ -467,16 +464,16 @@ function GapsTab({ data }: { data: FormMappingResponse }) {
                 </div>
               </div>
               <div className="p-6">
-                <p className="text-slate-700 mb-4">{gap.description}</p>
+                <p className="text-pe-text-secondary mb-4">{gap.description}</p>
 
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
+                  <div className="p-3 bg-amber-50 rounded-pe-md border border-amber-200">
                     <div className="text-xs font-semibold text-amber-800 uppercase mb-1">Impact</div>
                     <div className="text-sm text-amber-900">{gap.impact}</div>
                   </div>
-                  <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                    <div className="text-xs font-semibold text-blue-800 uppercase mb-1">Fix Complexity</div>
-                    <div className="text-sm text-blue-900">{gap.fix_complexity}</div>
+                  <div className="p-3 bg-pe-teal-50 rounded-pe-md border border-pe-teal-200">
+                    <div className="text-xs font-semibold text-pe-teal-700 uppercase mb-1">Fix Complexity</div>
+                    <div className="text-sm text-pe-teal-700">{gap.fix_complexity}</div>
                   </div>
                 </div>
               </div>
@@ -485,52 +482,52 @@ function GapsTab({ data }: { data: FormMappingResponse }) {
         </div>
 
         {/* Priority Recommendation */}
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200 p-6">
-          <h3 className="font-semibold text-blue-900 mb-3">Recommended Fix Priority</h3>
+        <div className="bg-pe-teal-50 rounded-pe-lg border border-pe-teal-200 p-6">
+          <h3 className="font-semibold text-pe-teal-700 mb-3">Recommended Fix Priority</h3>
           <ol className="space-y-2">
             <li className="flex items-start gap-3">
-              <span className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-medium shrink-0">
+              <span className="w-6 h-6 bg-pe-teal-600 text-white rounded-full flex items-center justify-center text-sm font-medium shrink-0">
                 1
               </span>
               <div>
-                <span className="font-medium text-slate-900">REIT/PTP Component</span>
-                <span className="text-slate-600"> - Simple fix, high impact. Just add the existing variable to the final formula.</span>
+                <span className="font-medium text-pe-text-primary">REIT/PTP Component</span>
+                <span className="text-pe-text-secondary"> - Simple fix, high impact. Just add the existing variable to the final formula.</span>
               </div>
             </li>
             <li className="flex items-start gap-3">
-              <span className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-medium shrink-0">
+              <span className="w-6 h-6 bg-pe-teal-500 text-white rounded-full flex items-center justify-center text-sm font-medium shrink-0">
                 2
               </span>
               <div>
-                <span className="font-medium text-slate-900">Loss Carryforward</span>
-                <span className="text-slate-600"> - Medium complexity. Requires new state variables for multi-year tracking.</span>
+                <span className="font-medium text-pe-text-primary">Loss Carryforward</span>
+                <span className="text-pe-text-secondary"> - Medium complexity. Requires new state variables for multi-year tracking.</span>
               </div>
             </li>
             <li className="flex items-start gap-3">
-              <span className="w-6 h-6 bg-blue-400 text-white rounded-full flex items-center justify-center text-sm font-medium shrink-0">
+              <span className="w-6 h-6 bg-pe-teal-400 text-white rounded-full flex items-center justify-center text-sm font-medium shrink-0">
                 3
               </span>
               <div>
-                <span className="font-medium text-slate-900">Per-Business Tracking</span>
-                <span className="text-slate-600"> - Architectural change. Required for proper wage limitation per business.</span>
+                <span className="font-medium text-pe-text-primary">Per-Business Tracking</span>
+                <span className="text-pe-text-secondary"> - Architectural change. Required for proper wage limitation per business.</span>
               </div>
             </li>
             <li className="flex items-start gap-3">
-              <span className="w-6 h-6 bg-blue-300 text-white rounded-full flex items-center justify-center text-sm font-medium shrink-0">
+              <span className="w-6 h-6 bg-pe-teal-300 text-white rounded-full flex items-center justify-center text-sm font-medium shrink-0">
                 4
               </span>
               <div>
-                <span className="font-medium text-slate-900">Aggregation Election</span>
-                <span className="text-slate-600"> - New feature. Allows combining businesses to share W-2 capacity.</span>
+                <span className="font-medium text-pe-text-primary">Aggregation Election</span>
+                <span className="text-pe-text-secondary"> - New feature. Allows combining businesses to share W-2 capacity.</span>
               </div>
             </li>
             <li className="flex items-start gap-3">
-              <span className="w-6 h-6 bg-blue-200 text-blue-800 rounded-full flex items-center justify-center text-sm font-medium shrink-0">
+              <span className="w-6 h-6 bg-pe-teal-200 text-pe-teal-700 rounded-full flex items-center justify-center text-sm font-medium shrink-0">
                 5
               </span>
               <div>
-                <span className="font-medium text-slate-900">Cooperative Provisions</span>
-                <span className="text-slate-600"> - Specialized feature for agricultural patrons.</span>
+                <span className="font-medium text-pe-text-primary">Cooperative Provisions</span>
+                <span className="text-pe-text-secondary"> - Specialized feature for agricultural patrons.</span>
               </div>
             </li>
           </ol>

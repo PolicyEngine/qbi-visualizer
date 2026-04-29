@@ -238,15 +238,15 @@ export default function CalculatorView() {
             {openSections.has('QBI Income Sources') && (
               <div>
                 {/* Header row */}
-                <div className="grid grid-cols-[1fr_140px_28px] gap-1 px-3 py-1 border-t border-pe-gray-100 text-[10px] text-pe-text-tertiary uppercase tracking-wider">
+                <div className="grid grid-cols-[1fr_140px_72px] gap-1 px-3 py-1 border-t border-pe-gray-100 text-[10px] text-pe-text-tertiary uppercase tracking-wider">
                   <span>Source</span>
                   <span className="text-right">Amount</span>
-                  <span className="text-center" title="Qualified">Q</span>
+                  <span className="text-center">Qualified</span>
                 </div>
                 {qbiIncomeRows.map(({ income, qualified }) => (
                   <div
                     key={income.name}
-                    className="grid grid-cols-[1fr_140px_28px] gap-1 items-center px-3 py-1.5 border-t border-pe-gray-100 hover:bg-pe-gray-50"
+                    className="grid grid-cols-[1fr_140px_72px] gap-1 items-center px-3 py-1.5 border-t border-pe-gray-100 hover:bg-pe-gray-50"
                   >
                     <label className="text-sm text-pe-text-primary truncate">{income.label}</label>
                     <div className="relative">
