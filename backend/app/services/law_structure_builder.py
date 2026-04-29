@@ -297,7 +297,7 @@ def _build_section_b3_phaseout(variables: Dict, parameters: Dict) -> LawSection:
         id="sec_b3_phaseout",
         section_number="199A(b)(3)",
         title="Phase-In of Wage/Property Limitation",
-        description="The W-2 wage limitation phases in over $50,000 ($100,000 for joint filers) above the threshold. Below threshold: no limitation. In phase-in range: partial limitation. Above phase-in: full limitation.",
+        description="The W-2 wage limitation phases in above the threshold over a fixed range. Below threshold: no limitation. In phase-in range: partial limitation. Above phase-in: full limitation. Range: $50,000 single / $100,000 joint pre-2026; expanded to $75,000 / $150,000 starting 2026 under the One Big Beautiful Bill Act.",
         legal_reference=LegalReference(
             section="199A(b)(3)",
             title="Modifications to limitation based on W-2 wages",
@@ -324,16 +324,18 @@ def _build_section_b3_phaseout(variables: Dict, parameters: Dict) -> LawSection:
             ),
             Parameter(
                 name="gov.irs.deductions.qbi.phase_out.length",
-                label="Phase-out Range (Single)",
+                label="2025 Phase-out Range (Single) — pre-OBBBA",
                 value=50000,
                 unit="USD",
+                year=2025,
                 filing_status="SINGLE"
             ),
             Parameter(
                 name="gov.irs.deductions.qbi.phase_out.length",
-                label="Phase-out Range (Joint)",
+                label="2025 Phase-out Range (Joint) — pre-OBBBA",
                 value=100000,
                 unit="USD",
+                year=2025,
                 filing_status="JOINT"
             ),
         ],
@@ -978,7 +980,7 @@ def _build_adjacent_sections() -> List[AdjacentSection]:
             section_number="§52(a)(b)",
             title="Controlled Group Aggregation",
             description="Rules for aggregating commonly controlled businesses for purposes of wage limitations.",
-            relevance_to_qbid="§199A(b)(4) references these rules for determining W-2 wages across related entities. Taxpayers may also elect to aggregate businesses under §199A(b)(5).",
+            relevance_to_qbid="§199A(b)(4) references these rules for determining W-2 wages across related entities. Taxpayers may also elect to aggregate businesses under Treas. Reg. § 1.199A-4.",
             legal_reference=LegalReference(
                 section="52",
                 title="Controlled groups",
@@ -986,7 +988,7 @@ def _build_adjacent_sections() -> List[AdjacentSection]:
                 text="For purposes of this subpart, all employees of all corporations which are members of the same controlled group of corporations shall be treated as employed by a single employer."
             ),
             status=ImplementationStatus.MISSING,
-            status_notes="Aggregation election under §199A(b)(5) is NOT implemented. Each business is treated independently. Users cannot elect to combine multiple qualifying businesses to share W-2 wages.",
+            status_notes="The aggregation election (Treas. Reg. § 1.199A-4) is NOT implemented. Each business is treated independently. Users cannot elect to combine multiple qualifying businesses to share W-2 wages.",
             key_provisions=[
                 "Controlled groups share wage limitation calculations",
                 "Taxpayers may ELECT to aggregate qualifying businesses",
@@ -995,7 +997,7 @@ def _build_adjacent_sections() -> List[AdjacentSection]:
                 "Election is irrevocable without IRS consent"
             ],
             variables_used=[],
-            referenced_by=["199A(b)(4)", "199A(b)(5)"]
+            referenced_by=["199A(b)(4)", "Treas. Reg. § 1.199A-4"]
         ),
 
         # Section 6051(a) - W-2 Wage Definition

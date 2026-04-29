@@ -280,7 +280,7 @@ def build_form_8995a_mapping() -> TaxFormMapping:
         schedule_id="B",
         schedule_name="Aggregation of Business Operations",
         description="Elect to aggregate multiple qualifying businesses",
-        who_must_file="Taxpayers electing to aggregate businesses under §199A(b)(5)",
+        who_must_file="Taxpayers electing to aggregate businesses under Treas. Reg. § 1.199A-4",
         status=ImplementationStatus.MISSING,
         status_notes="PE does not support business aggregation election. Each business is treated independently.",
         lines=[
@@ -506,14 +506,14 @@ def build_form_mapping_response() -> FormMappingResponse:
         {
             "id": "minimum_floor",
             "title": "Minimum Deduction Floor (2026+)",
-            "form_lines": "§199A(i) per OBBBA (2025)",
-            "description": "$400 minimum deduction for taxpayers with at least $1,000 of QBI, effective starting 2026"
+            "form_lines": "§199A(i)",
+            "description": "$400 minimum deduction for taxpayers with at least $1,000 of QBI, effective for tax years beginning after Dec 31, 2025 (added by the One Big Beautiful Bill Act)"
         },
         {
             "id": "phaseout_range",
             "title": "Phase-Out Range",
             "form_lines": "Instructions",
-            "description": "$50,000 (single) and $100,000 (MFJ) phase-out ranges are correct"
+            "description": "Phase-out ranges are correctly parameterized: $50,000 single / $100,000 joint pre-2026, expanded to $75,000 / $150,000 starting 2026 under OBBBA"
         },
     ]
 
