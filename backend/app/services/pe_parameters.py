@@ -45,3 +45,8 @@ def qbi_reit_ptp_rate(year: int = DEFAULT_YEAR) -> float:
 
 def qbi_floor_in_effect(year: int = DEFAULT_YEAR) -> bool:
     return bool(pe_params(year).gov.irs.deductions.qbi.deduction_floor.in_effect)
+
+
+def qbi_floor_amount(qbi_value: float, year: int = DEFAULT_YEAR) -> float:
+    """Look up the OBBBA minimum-deduction floor for the given QBI level."""
+    return float(pe_params(year).gov.irs.deductions.qbi.deduction_floor.amount.calc(qbi_value))

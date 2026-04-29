@@ -651,14 +651,14 @@ def _build_section_i_minimum_deduction(variables: Dict, parameters: Dict) -> Law
         parameters=[
             Parameter(
                 name="gov.irs.deductions.qbi.deduction_floor.in_effect",
-                label="Floor In Effect",
-                value=True,
+                label="Floor In Effect (2026+)",
+                value=pe.qbi_floor_in_effect(2026),
                 year=2026
             ),
             Parameter(
                 name="gov.irs.deductions.qbi.deduction_floor.amount",
-                label="Minimum Deduction",
-                value=400,
+                label="Minimum Deduction (≥$1,000 QBI)",
+                value=pe.qbi_floor_amount(1_000, 2026),
                 unit="USD",
                 year=2026
             ),
