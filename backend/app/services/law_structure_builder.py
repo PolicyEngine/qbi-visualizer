@@ -10,9 +10,6 @@ from app.models.law_structure import (
     Parameter,
     ComputationStep,
     DecisionPoint,
-    CalculatorInput,
-    CalculatorResult,
-    CalculatorStep,
     AdjacentSection,
 )
 
@@ -644,7 +641,7 @@ def _build_section_e_thresholds(variables: Dict, parameters: Dict) -> LawSection
         id="sec_e_thresholds",
         section_number="199A(e)",
         title="Threshold Amounts",
-        description="The threshold amount is $157,500 ($315,000 for joint filers), adjusted annually for inflation. These thresholds determine when wage/property limitations and SSTB exclusions begin to apply.",
+        description="The statutory base threshold is $157,500 (single) / $315,000 (joint), adjusted annually for inflation since 2018. Current values determine when the W-2 wage/UBIA limitation phases in and when the SSTB applicable percentage reduction applies.",
         legal_reference=LegalReference(
             section="199A(e)",
             title="Other definitions",
@@ -756,213 +753,6 @@ def _build_section_g_cooperatives(variables: Dict, parameters: Dict) -> LawSecti
         variables_used=[],
         next_sections=[],
         depends_on=[],
-    )
-
-
-def calculate_qbid(inputs: CalculatorInput) -> CalculatorResult:
-    """Run an interactive QBID calculation with step-by-step results."""
-
-    steps = []
-    warnings = []
-    missing_features = []
-
-    # Step 1: Calculate gross QBI
-    gross_qbi = 0
-    qbi_by_source = {}
-
-    if inputs.self_employment_qualified:
-        gross_qbi += inputs.self_employment_income
-        qbi_by_source["self_employment"] = inputs.self_employment_income
-    if inputs.partnership_qualified:
-        gross_qbi += inputs.partnership_s_corp_income
-        qbi_by_source["partnership_s_corp"] = inputs.partnership_s_corp_income
-    if inputs.rental_qualified:
-        gross_qbi += inputs.rental_income
-        qbi_by_source["rental"] = inputs.rental_income
-    if inputs.farm_qualified:
-        gross_qbi += inputs.farm_income
-        qbi_by_source["farm"] = inputs.farm_income
-
-    steps.append(CalculatorStep(
-        section_id="sec_c_qbi_definition",
-        section_title="§199A(c) - QBI Definition",
-        description="Sum qualified income sources",
-        inputs=qbi_by_source,
-        computation=f"Gross QBI = {' + '.join(f'${v:,.0f}' for v in qbi_by_source.values())}",
-        result=gross_qbi,
-        result_label="Gross QBI"
-    ))
-
-    # Step 2: Subtract QBI deductions
-    qbi_deductions = inputs.se_tax_deduction + inputs.health_insurance_deduction + inputs.pension_deduction
-    net_qbi = max(0, gross_qbi - qbi_deductions)
-
-    steps.append(CalculatorStep(
-        section_id="sec_c_qbi_definition",
-        section_title="§199A(c) - QBI Deductions",
-        description="Subtract allocable deductions",
-        inputs={
-            "se_tax_deduction": inputs.se_tax_deduction,
-            "health_insurance": inputs.health_insurance_deduction,
-            "pension": inputs.pension_deduction
-        },
-        computation=f"Net QBI = ${gross_qbi:,.0f} - ${qbi_deductions:,.0f}",
-        result=net_qbi,
-        result_label="Net QBI"
-    ))
-
-    # Step 3: Calculate base QBID (20%)
-    qbid_max = 0.20 * net_qbi
-
-    steps.append(CalculatorStep(
-        section_id="sec_b1_combined_qbi",
-        section_title="§199A(b)(1) - Base Deduction",
-        description="Calculate 20% of QBI",
-        inputs={"net_qbi": net_qbi},
-        computation=f"Base QBID = 20% × ${net_qbi:,.0f}",
-        result=qbid_max,
-        result_label="Base QBID"
-    ))
-
-    # Step 4: Determine threshold
-    thresholds = {
-        "SINGLE": 197300,
-        "JOINT": 394600,
-        "SEPARATE": 197300,
-        "HEAD_OF_HOUSEHOLD": 197300,
-        "SURVIVING_SPOUSE": 394600,
-    }
-    phase_out_lengths = {
-        "SINGLE": 50000,
-        "JOINT": 100000,
-        "SEPARATE": 50000,
-        "HEAD_OF_HOUSEHOLD": 50000,
-        "SURVIVING_SPOUSE": 100000,
-    }
-
-    threshold = thresholds.get(inputs.filing_status, 197300)
-    phase_out_length = phase_out_lengths.get(inputs.filing_status, 50000)
-
-    # Step 5: Calculate wage/property caps
-    wage_cap = 0.50 * inputs.w2_wages
-    alt_cap = 0.25 * inputs.w2_wages + 0.025 * inputs.property_basis
-    full_cap = max(wage_cap, alt_cap)
-
-    limitation_applied = False
-    limitation_type = None
-
-    steps.append(CalculatorStep(
-        section_id="sec_b2_wage_limitation",
-        section_title="§199A(b)(2) - Wage/Property Cap",
-        description="Calculate limitation caps",
-        inputs={
-            "w2_wages": inputs.w2_wages,
-            "property_basis": inputs.property_basis
-        },
-        computation=f"Wage Cap = 50% × ${inputs.w2_wages:,.0f} = ${wage_cap:,.0f}\nAlt Cap = 25% × ${inputs.w2_wages:,.0f} + 2.5% × ${inputs.property_basis:,.0f} = ${alt_cap:,.0f}",
-        result=full_cap,
-        result_label="Applicable Cap",
-        notes=f"Using {'wage-only' if wage_cap >= alt_cap else 'wage+property'} cap"
-    ))
-
-    # Step 6: Apply phase-out
-    taxable_income = inputs.taxable_income
-    reduction_rate = min(1, max(0, taxable_income - threshold) / phase_out_length)
-    applicable_rate = 1 - reduction_rate
-
-    if taxable_income <= threshold:
-        phase_status = "Below threshold - no limitation"
-        phased_qbid = qbid_max
-    elif taxable_income >= threshold + phase_out_length:
-        phase_status = "Above phase-out - full limitation applies"
-        phased_qbid = min(qbid_max, full_cap)
-        limitation_applied = True
-        limitation_type = "full"
-    else:
-        phase_status = f"In phase-out range ({reduction_rate*100:.1f}% limited)"
-        reduction = reduction_rate * max(0, qbid_max - full_cap)
-        phased_qbid = qbid_max - reduction
-        limitation_applied = True
-        limitation_type = "partial"
-
-    steps.append(CalculatorStep(
-        section_id="sec_b3_phaseout",
-        section_title="§199A(b)(3) - Phase-Out",
-        description="Apply income-based phase-out",
-        inputs={
-            "taxable_income": taxable_income,
-            "threshold": threshold,
-            "phase_out_length": phase_out_length
-        },
-        computation=f"Reduction rate = ({taxable_income:,.0f} - {threshold:,.0f}) / {phase_out_length:,.0f} = {reduction_rate:.2%}",
-        result=phased_qbid,
-        result_label="Phased QBID",
-        notes=phase_status
-    ))
-
-    # Step 7: Apply SSTB reduction
-    sstb_reduction = 0
-    if inputs.is_sstb:
-        if taxable_income > threshold + phase_out_length:
-            # Above phase-out: SSTB gets nothing
-            sstb_reduction = phased_qbid
-            phased_qbid = 0
-            sstb_note = "SSTB above phase-out range - no deduction allowed"
-        elif taxable_income > threshold:
-            # In phase-out: SSTB proportionally reduced
-            sstb_reduction = phased_qbid * reduction_rate
-            phased_qbid = phased_qbid * applicable_rate
-            sstb_note = f"SSTB reduced by {reduction_rate:.1%}"
-        else:
-            sstb_note = "SSTB below threshold - full deduction allowed"
-
-        steps.append(CalculatorStep(
-            section_id="sec_d2_sstb",
-            section_title="§199A(d)(2) - SSTB Reduction",
-            description="Apply SSTB phase-out",
-            inputs={"is_sstb": inputs.is_sstb, "applicable_rate": applicable_rate},
-            computation=f"SSTB Multiplier = {applicable_rate:.2%}",
-            result=phased_qbid,
-            result_label="After SSTB",
-            notes=sstb_note
-        ))
-
-    # Step 8: Add REIT/PTP (not implemented - warn user)
-    if inputs.reit_dividends > 0 or inputs.ptp_income > 0:
-        reit_ptp_component = 0.20 * (inputs.reit_dividends + inputs.ptp_income)
-        missing_features.append("REIT dividends and PTP income")
-        warnings.append(f"REIT/PTP income (${inputs.reit_dividends + inputs.ptp_income:,.0f}) would add ${reit_ptp_component:,.0f} to QBID but is NOT implemented in PolicyEngine")
-
-    # Step 9: Apply taxable income cap
-    taxable_income_cap = 0.20 * max(0, taxable_income - inputs.capital_gains)
-    taxable_income_cap_applied = phased_qbid > taxable_income_cap
-    final_qbid = min(phased_qbid, taxable_income_cap)
-
-    steps.append(CalculatorStep(
-        section_id="sec_a_allowance",
-        section_title="§199A(a) - Final Cap",
-        description="Apply taxable income limitation",
-        inputs={
-            "taxable_income": taxable_income,
-            "capital_gains": inputs.capital_gains
-        },
-        computation=f"Cap = 20% × (${taxable_income:,.0f} - ${inputs.capital_gains:,.0f}) = ${taxable_income_cap:,.0f}",
-        result=final_qbid,
-        result_label="Final QBID",
-        notes="Taxable income cap applied" if taxable_income_cap_applied else "Taxable income cap not binding"
-    ))
-
-    return CalculatorResult(
-        inputs=inputs,
-        steps=steps,
-        final_deduction=final_qbid,
-        qbi_by_source=qbi_by_source,
-        limitation_applied=limitation_applied,
-        limitation_type=limitation_type,
-        sstb_reduction=sstb_reduction,
-        taxable_income_cap_applied=taxable_income_cap_applied,
-        warnings=warnings,
-        missing_features_used=missing_features,
     )
 
 
@@ -1133,7 +923,7 @@ def _build_adjacent_sections() -> List[AdjacentSection]:
         # Section 707 - Partnership Payments
         AdjacentSection(
             id="sec_707",
-            section_number="§707(a)(c)",
+            section_number="§707(c)",
             title="Partnership Transactions with Partners",
             description="Defines guaranteed payments and payments for services to partners, which are EXCLUDED from QBI.",
             relevance_to_qbid="§199A(c)(4) excludes reasonable compensation and guaranteed payments from QBI to prevent double-dipping.",
@@ -1304,10 +1094,9 @@ def _build_adjacent_sections() -> List[AdjacentSection]:
             status_notes="PolicyEngine parameters are inflation-adjusted with updated thresholds by year.",
             key_provisions=[
                 "Uses Chained CPI-U for adjustments",
-                "Base year for QBID thresholds is 2017",
-                "Rounded to nearest $50 for phase-out start",
-                "Thresholds updated annually",
-                "2024 thresholds: $191,950 single / $383,900 joint"
+                "Base year for QBID thresholds is 2017 (per §199A(e)(2)(B))",
+                "Rounded down to nearest $25 (or $25 for MFS)",
+                "Thresholds updated annually via PolicyEngine YAML"
             ],
             variables_used=[],
             referenced_by=["199A(e)(2)(B)"]
