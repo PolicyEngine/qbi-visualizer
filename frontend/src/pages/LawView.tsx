@@ -358,7 +358,7 @@ const AdjacentSectionsView = ({ structure }: { structure: QBIDLawStructure }) =>
 
           {/* Sections grouped by category */}
           {[
-            { title: 'Income Qualification', sections: adjacentSections.filter((s) => ['sec_162', 'sec_469', 'sec_707', 'sec_199A_c2'].includes(s.id)) },
+            { title: 'Income Qualification', sections: adjacentSections.filter((s) => ['sec_162', 'sec_469', 'sec_707'].includes(s.id)) },
             { title: 'SSTB Definition', sections: adjacentSections.filter((s) => ['sec_1202', 'sec_475'].includes(s.id)) },
             { title: 'REIT & PTP Income', sections: adjacentSections.filter((s) => ['sec_857', 'sec_7704'].includes(s.id)) },
             { title: 'Limitations & Aggregation', sections: adjacentSections.filter((s) => ['sec_1_h', 'sec_167_168', 'sec_52', 'sec_6051', 'sec_1_f'].includes(s.id)) },

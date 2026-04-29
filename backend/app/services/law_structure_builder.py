@@ -1039,31 +1039,4 @@ def _build_adjacent_sections() -> List[AdjacentSection]:
             variables_used=[],
             referenced_by=["199A(e)(2)(B)"]
         ),
-
-        # Section 199A(c)(2) - Loss Carryforward (internal but critical)
-        AdjacentSection(
-            id="sec_199A_c2",
-            section_number="§199A(c)(2)",
-            title="QBI Loss Carryforward Rules",
-            description="Provides that negative QBI (losses) carry forward to reduce future QBI amounts.",
-            relevance_to_qbid="This is a core §199A provision. If QBI is negative, the loss offsets future QBI dollar-for-dollar before the 20% deduction is calculated.",
-            legal_reference=LegalReference(
-                section="199A(c)(2)",
-                title="Carryover of loss",
-                url="https://www.law.cornell.edu/uscode/text/26/199A#c_2",
-                text="If the net amount of qualified business income from all qualified trades or businesses during any taxable year is less than zero, such amount shall be treated as a loss... carried forward to the next taxable year."
-            ),
-            status=ImplementationStatus.MISSING,
-            status_notes="PolicyEngine uses max(0, QBI) and does NOT carry forward negative QBI to future years.",
-            key_provisions=[
-                "Negative QBI creates a QBI loss carryforward",
-                "Loss reduces QBI in subsequent years",
-                "Tracked separately from NOL carryforwards",
-                "Reduces QBI before 20% calculation",
-                "No limitation on carryforward period"
-            ],
-            variables_used=["qualified_business_income"],
-            github_url=f"{GITHUB_BASE}/policyengine_us/variables/gov/irs/income/taxable_income/deductions/qualified_business_income_deduction/qualified_business_income.py",
-            referenced_by=["199A(c)(2)"]
-        ),
     ]
