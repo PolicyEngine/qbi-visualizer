@@ -2,13 +2,11 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import {
   QBIDLawStructure,
-  CalculatorInput,
-  CalculatorResult,
   LawSection,
   ImplementationStatus,
 } from '../types/law';
 
-type ViewMode = 'flowchart' | 'calculator' | 'code-mapping' | 'adjacent';
+type ViewMode = 'flowchart' | 'code-mapping' | 'adjacent';
 
 const StatusBadge = ({ status }: { status: ImplementationStatus }) => {
   const styles = {
@@ -311,272 +309,6 @@ const FlowchartView = ({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
               </svg>
               <p className="text-sm">Select a section to view details</p>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-const CalculatorView = ({
-  result,
-  inputs,
-  onInputChange,
-  onCalculate,
-  isCalculating,
-}: {
-  result: CalculatorResult | null;
-  inputs: CalculatorInput;
-  onInputChange: (field: keyof CalculatorInput, value: any) => void;
-  onCalculate: () => void;
-  isCalculating: boolean;
-}) => {
-  const filingStatuses = ['SINGLE', 'JOINT', 'SEPARATE', 'HEAD_OF_HOUSEHOLD', 'SURVIVING_SPOUSE'];
-
-  const InputField = ({ label, field, prefix = '$' }: { label: string; field: keyof CalculatorInput; prefix?: string }) => (
-    <div>
-      <label className="block text-sm font-medium text-slate-700 mb-1.5">{label}</label>
-      <div className="relative">
-        {prefix && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">{prefix}</span>}
-        <input
-          type="number"
-          value={inputs[field] as number}
-          onChange={(e) => onInputChange(field, parseFloat(e.target.value) || 0)}
-          className={`w-full ${prefix ? 'pl-7' : 'px-3'} pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-        />
-      </div>
-    </div>
-  );
-
-  return (
-    <div className="flex h-full">
-      {/* Left: Inputs */}
-      <div className="w-[340px] border-r border-slate-200 bg-white overflow-y-auto p-6">
-        <h3 className="text-lg font-semibold text-slate-900 mb-6">Calculator Inputs</h3>
-
-        <div className="space-y-6">
-          <div>
-            <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Income Sources</h4>
-            <div className="space-y-4">
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-sm font-medium text-slate-700">Self-Employment Income</label>
-                  <label className="flex items-center gap-1.5 text-xs text-slate-500">
-                    <input
-                      type="checkbox"
-                      checked={inputs.self_employment_qualified}
-                      onChange={(e) => onInputChange('self_employment_qualified', e.target.checked)}
-                      className="rounded border-slate-300"
-                    />
-                    Qualified
-                  </label>
-                </div>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
-                  <input
-                    type="number"
-                    value={inputs.self_employment_income}
-                    onChange={(e) => onInputChange('self_employment_income', parseFloat(e.target.value) || 0)}
-                    className="w-full pl-7 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-sm font-medium text-slate-700">Partnership/S-Corp</label>
-                  <label className="flex items-center gap-1.5 text-xs text-slate-500">
-                    <input
-                      type="checkbox"
-                      checked={inputs.partnership_qualified}
-                      onChange={(e) => onInputChange('partnership_qualified', e.target.checked)}
-                      className="rounded border-slate-300"
-                    />
-                    Qualified
-                  </label>
-                </div>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
-                  <input
-                    type="number"
-                    value={inputs.partnership_s_corp_income}
-                    onChange={(e) => onInputChange('partnership_s_corp_income', parseFloat(e.target.value) || 0)}
-                    className="w-full pl-7 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-sm font-medium text-slate-700">Rental Income</label>
-                  <label className="flex items-center gap-1.5 text-xs text-slate-500">
-                    <input
-                      type="checkbox"
-                      checked={inputs.rental_qualified}
-                      onChange={(e) => onInputChange('rental_qualified', e.target.checked)}
-                      className="rounded border-slate-300"
-                    />
-                    Qualified
-                  </label>
-                </div>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
-                  <input
-                    type="number"
-                    value={inputs.rental_income}
-                    onChange={(e) => onInputChange('rental_income', parseFloat(e.target.value) || 0)}
-                    className="w-full pl-7 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Business Properties</h4>
-            <div className="space-y-4">
-              <InputField label="W-2 Wages Paid by Business" field="w2_wages" />
-              <InputField label="Property Basis (UBIA)" field="property_basis" />
-              <label className="flex items-center gap-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
-                <input
-                  type="checkbox"
-                  checked={inputs.is_sstb}
-                  onChange={(e) => onInputChange('is_sstb', e.target.checked)}
-                  className="rounded border-slate-300"
-                />
-                <span className="text-sm text-slate-700">Specified Service Trade or Business (SSTB)</span>
-              </label>
-            </div>
-          </div>
-
-          <div>
-            <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Deductions</h4>
-            <div className="space-y-4">
-              <InputField label="SE Tax Deduction (50% of SE tax)" field="se_tax_deduction" />
-              <InputField label="Health Insurance Deduction" field="health_insurance_deduction" />
-            </div>
-          </div>
-
-          <div>
-            <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Tax Situation</h4>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Filing Status</label>
-                <select
-                  value={inputs.filing_status}
-                  onChange={(e) => onInputChange('filing_status', e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-                >
-                  {filingStatuses.map((status) => (
-                    <option key={status} value={status}>
-                      {status.replace(/_/g, ' ')}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <InputField label="Taxable Income (before QBID)" field="taxable_income" />
-              <InputField label="Capital Gains + Qualified Dividends" field="capital_gains" />
-            </div>
-          </div>
-        </div>
-
-        <button
-          onClick={onCalculate}
-          disabled={isCalculating}
-          className="mt-8 w-full bg-slate-900 text-white py-3 px-4 rounded-lg font-medium hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {isCalculating ? 'Calculating...' : 'Calculate QBID'}
-        </button>
-      </div>
-
-      {/* Right: Results */}
-      <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
-        {result ? (
-          <div className="max-w-2xl mx-auto">
-            {/* Result banner */}
-            <div className="mb-8 bg-white rounded-xl border border-slate-200 p-6 text-center">
-              <div className="text-sm text-slate-500 mb-1">Qualified Business Income Deduction</div>
-              <div className="text-5xl font-bold text-emerald-600">
-                ${result.final_deduction.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-              </div>
-              {result.warnings.length > 0 && (
-                <div className="mt-4 space-y-2">
-                  {result.warnings.map((w, i) => (
-                    <div key={i} className="text-sm text-amber-700 bg-amber-50 p-3 rounded-lg border border-amber-200">
-                      {w}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Steps */}
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">Computation Breakdown</h3>
-            <div className="space-y-3">
-              {result.steps.map((step, idx) => (
-                <div
-                  key={idx}
-                  className={`bg-white rounded-xl border p-4 ${
-                    idx === result.steps.length - 1
-                      ? 'border-emerald-200 bg-emerald-50'
-                      : 'border-slate-200'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-4 mb-2">
-                    <div>
-                      <span className="text-xs font-mono text-blue-600">{step.section_title}</span>
-                      <h4 className="font-medium text-slate-900">{step.description}</h4>
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <div className="text-xs text-slate-500">{step.result_label}</div>
-                      <div className="text-xl font-bold text-slate-900">
-                        ${step.result.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-sm text-slate-600 font-mono bg-slate-50 p-3 rounded-lg whitespace-pre-wrap border border-slate-100">
-                    {step.computation}
-                  </div>
-                  {step.notes && (
-                    <div className="mt-2 text-sm text-blue-700 bg-blue-50 p-2 rounded-lg border border-blue-100">
-                      {step.notes}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {/* Summary */}
-            <div className="mt-6 grid grid-cols-3 gap-4">
-              <div className="bg-white p-4 rounded-xl border border-slate-200">
-                <div className="text-xs text-slate-500 mb-1">Wage/Property Limitation</div>
-                <div className="font-semibold text-slate-900">
-                  {result.limitation_applied ? `Applied (${result.limitation_type})` : 'Not Applied'}
-                </div>
-              </div>
-              <div className="bg-white p-4 rounded-xl border border-slate-200">
-                <div className="text-xs text-slate-500 mb-1">Taxable Income Cap</div>
-                <div className="font-semibold text-slate-900">
-                  {result.taxable_income_cap_applied ? 'Applied' : 'Not Binding'}
-                </div>
-              </div>
-              <div className="bg-white p-4 rounded-xl border border-slate-200">
-                <div className="text-xs text-slate-500 mb-1">SSTB Reduction</div>
-                <div className="font-semibold text-slate-900">
-                  {result.sstb_reduction > 0 ? `$${result.sstb_reduction.toLocaleString()}` : 'None'}
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="h-full flex items-center justify-center">
-            <div className="text-center text-slate-400">
-              <svg className="w-16 h-16 mx-auto mb-4 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-              </svg>
-              <p className="text-lg font-medium text-slate-500">Enter values and click Calculate</p>
-              <p className="text-sm text-slate-400 mt-1">Results will appear here</p>
             </div>
           </div>
         )}
@@ -904,29 +636,7 @@ export default function LawView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [calcInputs, setCalcInputs] = useState<CalculatorInput>({
-    self_employment_income: 100000,
-    partnership_s_corp_income: 0,
-    rental_income: 0,
-    farm_income: 0,
-    self_employment_qualified: true,
-    partnership_qualified: true,
-    rental_qualified: true,
-    farm_qualified: true,
-    w2_wages: 30000,
-    property_basis: 50000,
-    is_sstb: false,
-    se_tax_deduction: 7065,
-    health_insurance_deduction: 0,
-    pension_deduction: 0,
-    filing_status: 'SINGLE',
-    taxable_income: 80000,
-    capital_gains: 0,
-    reit_dividends: 0,
-    ptp_income: 0,
-  });
-  const [calcResult, setCalcResult] = useState<CalculatorResult | null>(null);
-  const [isCalculating, setIsCalculating] = useState(false);
+
 
   useEffect(() => {
     fetchStructure();
@@ -945,21 +655,7 @@ export default function LawView() {
     }
   };
 
-  const handleCalculate = async () => {
-    try {
-      setIsCalculating(true);
-      const response = await axios.post('/api/law/calculate', calcInputs);
-      setCalcResult(response.data);
-    } catch (err) {
-      console.error('Calculation failed:', err);
-    } finally {
-      setIsCalculating(false);
-    }
-  };
 
-  const handleInputChange = (field: keyof CalculatorInput, value: any) => {
-    setCalcInputs((prev) => ({ ...prev, [field]: value }));
-  };
 
   if (loading) {
     return (
@@ -991,7 +687,6 @@ export default function LawView() {
           {[
             { id: 'flowchart', label: 'Law Flowchart' },
             { id: 'adjacent', label: 'Adjacent Sections' },
-            { id: 'calculator', label: 'Interactive Calculator' },
             { id: 'code-mapping', label: 'Code Mapping' },
           ].map((tab) => (
             <button
@@ -1018,16 +713,7 @@ export default function LawView() {
             onSelectSection={setSelectedSection}
           />
         )}
-        {viewMode === 'calculator' && (
-          <CalculatorView
-            result={calcResult}
-            inputs={calcInputs}
-            onInputChange={handleInputChange}
-            onCalculate={handleCalculate}
-            isCalculating={isCalculating}
-          />
-        )}
-        {viewMode === 'code-mapping' && <CodeMappingView structure={structure} />}
+{viewMode === 'code-mapping' && <CodeMappingView structure={structure} />}
         {viewMode === 'adjacent' && <AdjacentSectionsView structure={structure} />}
       </div>
     </div>

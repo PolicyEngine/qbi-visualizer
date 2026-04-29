@@ -1,75 +1,63 @@
 import { useState } from 'react'
+import CalculatorView from './pages/CalculatorView'
 import LawView from './pages/LawView'
 import GraphView from './pages/GraphView'
 import TaxsimView from './pages/TaxsimView'
 import TaxFormView from './pages/TaxFormView'
 import './App.css'
 
-type MainView = 'law' | 'graph' | 'taxsim' | 'forms'
+type MainView = 'calculator' | 'law' | 'graph' | 'taxsim' | 'forms'
 
 function App() {
-  const [mainView, setMainView] = useState<MainView>('law')
+  const [mainView, setMainView] = useState<MainView>('calculator')
+
+  const tabs: { id: MainView; label: string }[] = [
+    { id: 'calculator', label: 'QBID calculator' },
+    { id: 'law', label: 'Law structure' },
+    { id: 'graph', label: 'Code graph' },
+    { id: 'taxsim', label: 'TAXSIM comparison' },
+    { id: 'forms', label: 'Tax forms' },
+  ]
 
   return (
-    <div className="App flex flex-col h-screen bg-slate-50">
-      <header className="bg-white border-b border-slate-200 px-6 py-4">
+    <div className="App flex flex-col h-screen bg-pe-bg-primary">
+      <header className="bg-white border-b border-pe-gray-200 px-6 py-4">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
-          <div>
-            <h1 className="text-xl font-semibold text-slate-900">
-              26 U.S.C. § 199A
-              <span className="text-slate-400 font-normal ml-2">|</span>
-              <span className="text-slate-600 font-normal ml-2">Qualified Business Income Deduction</span>
-            </h1>
-            <p className="text-sm text-slate-500 mt-0.5">
-              PolicyEngine US Implementation Visualizer
-            </p>
+          <div className="flex items-center gap-4">
+            <img
+              src="https://raw.githubusercontent.com/PolicyEngine/policyengine-app-v2/main/app/public/assets/logos/policyengine/teal.png"
+              alt="PolicyEngine"
+              className="h-8"
+            />
+            <div className="border-l border-pe-gray-200 pl-4">
+              <h1 className="text-lg font-semibold text-pe-text-primary">
+                Qualified Business Income Deduction
+              </h1>
+              <p className="text-xs text-pe-text-tertiary">
+                26 U.S.C. &sect; 199A
+              </p>
+            </div>
           </div>
-          <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
-            <button
-              onClick={() => setMainView('law')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                mainView === 'law'
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Law Structure
-            </button>
-            <button
-              onClick={() => setMainView('graph')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                mainView === 'graph'
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Code Graph
-            </button>
-            <button
-              onClick={() => setMainView('taxsim')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                mainView === 'taxsim'
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              TAXSIM Comparison
-            </button>
-            <button
-              onClick={() => setMainView('forms')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                mainView === 'forms'
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Tax Forms
-            </button>
+          <div className="flex gap-1 bg-pe-gray-100 p-1 rounded-pe-lg">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setMainView(tab.id)}
+                className={`px-4 py-2 rounded-pe-md text-sm font-medium transition-all ${
+                  mainView === tab.id
+                    ? 'bg-white text-pe-text-primary shadow-sm'
+                    : 'text-pe-text-secondary hover:text-pe-text-primary'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
         </div>
       </header>
 
       <main className="flex-1 overflow-hidden">
+        {mainView === 'calculator' && <CalculatorView />}
         {mainView === 'law' && <LawView />}
         {mainView === 'graph' && <GraphView />}
         {mainView === 'taxsim' && <TaxsimView />}
