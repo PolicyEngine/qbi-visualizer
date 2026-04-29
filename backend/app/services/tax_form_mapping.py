@@ -9,6 +9,7 @@ from app.models.tax_form_mapping import (
     FormMappingResponse,
     FormSummary,
 )
+from app.services import pe_parameters as pe
 
 
 def build_form_8995_mapping() -> TaxFormMapping:
@@ -174,11 +175,16 @@ def build_form_8995_mapping() -> TaxFormMapping:
     return TaxFormMapping(
         form_number="8995",
         form_title="Qualified Business Income Deduction Simplified Computation",
-        tax_year=2025,
+        tax_year=pe.DEFAULT_YEAR,
         description="Use this form if your taxable income is at or below the threshold and you're not a patron of an agricultural cooperative.",
-        who_can_use="Taxpayers with taxable income at or below $197,300 (single) or $394,600 (MFJ) who have QBI, qualified REIT dividends, or qualified PTP income",
-        threshold_single=197300,
-        threshold_joint=394600,
+        who_can_use=(
+            f"Taxpayers with taxable income at or below "
+            f"${int(pe.qbi_threshold('SINGLE')):,} (single) or "
+            f"${int(pe.qbi_threshold('JOINT')):,} (MFJ) who have QBI, "
+            f"qualified REIT dividends, or qualified PTP income"
+        ),
+        threshold_single=pe.qbi_threshold("SINGLE"),
+        threshold_joint=pe.qbi_threshold("JOINT"),
         irs_url="https://www.irs.gov/pub/irs-pdf/f8995.pdf",
         instructions_url="https://www.irs.gov/instructions/i8995",
         total_lines=len(lines),
@@ -393,11 +399,16 @@ def build_form_8995a_mapping() -> TaxFormMapping:
     return TaxFormMapping(
         form_number="8995-A",
         form_title="Qualified Business Income Deduction",
-        tax_year=2025,
+        tax_year=pe.DEFAULT_YEAR,
         description="Use this form if your taxable income exceeds the threshold, you have SSTB income in the phase-in range, or you're a patron of an agricultural cooperative.",
-        who_can_use="Taxpayers with taxable income above $197,300 (single) or $394,600 (MFJ), or with SSTB income in phase-in range, or cooperative patrons",
-        threshold_single=197300,
-        threshold_joint=394600,
+        who_can_use=(
+            f"Taxpayers with taxable income above "
+            f"${int(pe.qbi_threshold('SINGLE')):,} (single) or "
+            f"${int(pe.qbi_threshold('JOINT')):,} (MFJ), or with SSTB "
+            f"income in phase-in range, or cooperative patrons"
+        ),
+        threshold_single=pe.qbi_threshold("SINGLE"),
+        threshold_joint=pe.qbi_threshold("JOINT"),
         irs_url="https://www.irs.gov/pub/irs-pdf/f8995a.pdf",
         instructions_url="https://www.irs.gov/instructions/i8995a",
         total_lines=len(all_lines) + sum(len(s.lines) for s in all_schedules),
@@ -495,7 +506,12 @@ def build_form_mapping_response() -> FormMappingResponse:
             "id": "thresholds",
             "title": "Inflation-Adjusted Thresholds",
             "form_lines": "Instructions",
-            "description": "Phase-out start thresholds (e.g., $197,300 single / $394,600 MFJ for 2025) are correctly parameterized and inflation-adjusted"
+            "description": (
+                f"Phase-out start thresholds (e.g., "
+                f"${int(pe.qbi_threshold('SINGLE')):,} single / "
+                f"${int(pe.qbi_threshold('JOINT')):,} MFJ for {pe.DEFAULT_YEAR}) "
+                f"are correctly parameterized and inflation-adjusted"
+            )
         },
         {
             "id": "reit_ptp",
@@ -510,10 +526,28 @@ def build_form_mapping_response() -> FormMappingResponse:
             "description": "$400 minimum deduction for taxpayers with at least $1,000 of QBI, effective for tax years beginning after Dec 31, 2025 (added by the One Big Beautiful Bill Act)"
         },
         {
+            "id": "sstb_separate_bucket",
+            "title": "Separate SSTB and Non-SSTB QBI Buckets",
+            "form_lines": "Form 8995-A Schedule A vs Part II",
+            "description": "PolicyEngine tracks SSTB and non-SSTB QBI separately so the §199A(d)(3) applicable-percentage phase-out reduces only the SSTB component. Each bucket runs through its own wage/UBIA cap and applicable rate."
+        },
+        {
+            "id": "deduction_proration",
+            "title": "Proportional QBI Deduction Allocation",
+            "form_lines": "Pre-§199A QBI computation",
+            "description": "Allocable items (SE tax, SE health insurance, SE retirement contributions) are pro-rated across positive non-SSTB and SSTB gross income so mixed-sign categories don't generate negative shares."
+        },
+        {
             "id": "phaseout_range",
             "title": "Phase-Out Range",
             "form_lines": "Instructions",
-            "description": "Phase-out ranges are correctly parameterized: $50,000 single / $100,000 joint pre-2026, expanded to $75,000 / $150,000 starting 2026 under OBBBA"
+            "description": (
+                f"Phase-out ranges are correctly parameterized: "
+                f"${int(pe.qbi_phase_out_length('SINGLE', 2025)):,} single / "
+                f"${int(pe.qbi_phase_out_length('JOINT', 2025)):,} joint pre-2026, "
+                f"expanded to ${int(pe.qbi_phase_out_length('SINGLE', 2026)):,} / "
+                f"${int(pe.qbi_phase_out_length('JOINT', 2026)):,} starting 2026 under OBBBA"
+            )
         },
     ]
 

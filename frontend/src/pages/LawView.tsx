@@ -120,7 +120,11 @@ const FlowchartView = ({
                 <h2 className="text-lg font-semibold text-pe-text-primary">{structure.title}</h2>
                 <p className="text-sm text-pe-text-tertiary mt-1">
                   Effective {structure.effective_date}
-                  {structure.sunset_date && <span className="text-amber-600"> &middot; Sunsets {structure.sunset_date}</span>}
+                  {structure.sunset_date ? (
+                    <span className="text-amber-600"> &middot; Sunsets {structure.sunset_date}</span>
+                  ) : (
+                    <span> &middot; Permanent (One Big Beautiful Bill Act, 2025)</span>
+                  )}
                 </p>
               </div>
               <div className="flex gap-6">
