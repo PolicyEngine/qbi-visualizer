@@ -255,11 +255,6 @@ function BreakdownStaged({ outputs }: { outputs: Outputs }) {
                     {row.formLine && (
                       <span className="ml-2 text-[10px] text-pe-text-tertiary font-mono">{row.formLine}</span>
                     )}
-                    {row.computed && !row.emphasis && (
-                      <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded bg-pe-gray-100 text-[10px] uppercase tracking-wider text-pe-text-tertiary">
-                        derived
-                      </span>
-                    )}
                   </div>
                   <span className={`tabular-nums whitespace-nowrap ${row.emphasis ? 'text-lg font-semibold text-pe-teal-600' : 'text-base font-medium'} ${!row.emphasis && display < 0 ? 'text-pe-error' : ''} ${!row.emphasis && display >= 0 ? 'text-pe-text-primary' : ''}`}>
                     {display < 0 ? `−${formatCurrency(Math.abs(display))}` : formatCurrency(display)}
