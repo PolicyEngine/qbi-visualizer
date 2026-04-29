@@ -482,56 +482,24 @@ function GapsTab({ data }: { data: FormMappingResponse }) {
         </div>
 
         {/* Priority Recommendation */}
-        <div className="bg-pe-teal-50 rounded-pe-lg border border-pe-teal-200 p-6">
-          <h3 className="font-semibold text-pe-teal-700 mb-3">Recommended Fix Priority</h3>
-          <ol className="space-y-2">
-            <li className="flex items-start gap-3">
-              <span className="w-6 h-6 bg-pe-teal-600 text-white rounded-full flex items-center justify-center text-sm font-medium shrink-0">
-                1
-              </span>
-              <div>
-                <span className="font-medium text-pe-text-primary">REIT/PTP Component</span>
-                <span className="text-pe-text-secondary"> - Simple fix, high impact. Just add the existing variable to the final formula.</span>
-              </div>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="w-6 h-6 bg-pe-teal-500 text-white rounded-full flex items-center justify-center text-sm font-medium shrink-0">
-                2
-              </span>
-              <div>
-                <span className="font-medium text-pe-text-primary">Loss Carryforward</span>
-                <span className="text-pe-text-secondary"> - Medium complexity. Requires new state variables for multi-year tracking.</span>
-              </div>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="w-6 h-6 bg-pe-teal-400 text-white rounded-full flex items-center justify-center text-sm font-medium shrink-0">
-                3
-              </span>
-              <div>
-                <span className="font-medium text-pe-text-primary">Per-Business Tracking</span>
-                <span className="text-pe-text-secondary"> - Architectural change. Required for proper wage limitation per business.</span>
-              </div>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="w-6 h-6 bg-pe-teal-300 text-white rounded-full flex items-center justify-center text-sm font-medium shrink-0">
-                4
-              </span>
-              <div>
-                <span className="font-medium text-pe-text-primary">Aggregation Election</span>
-                <span className="text-pe-text-secondary"> - New feature. Allows combining businesses to share W-2 capacity.</span>
-              </div>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="w-6 h-6 bg-pe-teal-200 text-pe-teal-700 rounded-full flex items-center justify-center text-sm font-medium shrink-0">
-                5
-              </span>
-              <div>
-                <span className="font-medium text-pe-text-primary">Cooperative Provisions</span>
-                <span className="text-pe-text-secondary"> - Specialized feature for agricultural patrons.</span>
-              </div>
-            </li>
-          </ol>
-        </div>
+        {data.critical_gaps.length > 0 && (
+          <div className="bg-pe-teal-50 rounded-pe-lg border border-pe-teal-200 p-6">
+            <h3 className="font-semibold text-pe-teal-700 mb-3">Recommended Fix Priority</h3>
+            <ol className="space-y-2">
+              {data.critical_gaps.map((gap, idx) => (
+                <li key={gap.id} className="flex items-start gap-3">
+                  <span className="w-6 h-6 bg-pe-teal-600 text-white rounded-full flex items-center justify-center text-sm font-medium shrink-0">
+                    {idx + 1}
+                  </span>
+                  <div>
+                    <span className="font-medium text-pe-text-primary">{gap.title}</span>
+                    <span className="text-pe-text-secondary"> — {gap.fix_complexity}</span>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
       </div>
     </div>
   );

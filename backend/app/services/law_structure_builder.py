@@ -150,8 +150,7 @@ def _build_section_b1_combined_qbi(variables: Dict, parameters: Dict) -> LawSect
             url=f"{CORNELL_BASE}#b_1",
             text="The term 'combined qualified business income amount' means... the sum of— (A) the deductible amount for each qualified trade or business... plus (B) 20 percent of the aggregate amount of the qualified REIT dividends and qualified publicly traded partnership income..."
         ),
-        status=ImplementationStatus.PARTIAL,
-        status_notes="REIT dividends and PTP income component (B) is NOT implemented",
+        status=ImplementationStatus.COMPLETE,
         inputs=[
             InputVariable(
                 name="qbid_amount",
@@ -160,16 +159,18 @@ def _build_section_b1_combined_qbi(variables: Dict, parameters: Dict) -> LawSect
                 unit="USD"
             ),
             InputVariable(
-                name="reit_dividends",
-                label="Qualified REIT Dividends",
-                description="NOT IMPLEMENTED",
+                name="qualified_reit_and_ptp_income",
+                label="Qualified REIT Dividends and PTP Income",
+                description="Combined qualified REIT dividends and qualified publicly traded partnership income",
                 unit="USD"
             ),
-            InputVariable(
-                name="ptp_income",
-                label="Qualified PTP Income",
-                description="NOT IMPLEMENTED",
-                unit="USD"
+        ],
+        parameters=[
+            Parameter(
+                name="gov.irs.deductions.qbi.max.reit_ptp_rate",
+                label="REIT/PTP Deduction Rate",
+                value=0.20,
+                unit="rate"
             ),
         ],
         steps=[
@@ -182,11 +183,10 @@ def _build_section_b1_combined_qbi(variables: Dict, parameters: Dict) -> LawSect
             ),
             ComputationStep(
                 id="step_b1_2",
-                description="Add 20% of REIT/PTP income (NOT IMPLEMENTED)",
-                formula="reit_ptp_component = 20% × (reit_dividends + ptp_income)",
-                inputs=["reit_dividends", "ptp_income"],
-                output="reit_ptp_component",
-                code_reference="⚠️ This step is missing from PolicyEngine"
+                description="Add 20% of REIT/PTP income",
+                formula="reit_ptp_component = 20% × MAX(0, qualified_reit_and_ptp_income)",
+                inputs=["qualified_reit_and_ptp_income"],
+                output="reit_ptp_component"
             ),
             ComputationStep(
                 id="step_b1_3",
@@ -196,7 +196,7 @@ def _build_section_b1_combined_qbi(variables: Dict, parameters: Dict) -> LawSect
                 output="combined_qbid"
             ),
         ],
-        variables_used=["qbid_amount", "qualified_business_income_deduction"],
+        variables_used=["qbid_amount", "qualified_reit_and_ptp_income", "qualified_business_income_deduction"],
         github_url=f"{GITHUB_BASE}/policyengine_us/variables/gov/irs/income/taxable_income/deductions/qualified_business_income_deduction/qualified_business_income_deduction.py",
         next_sections=["sec_a_allowance"],
         depends_on=["sec_b2_wage_limitation", "sec_b3_phaseout", "sec_d2_sstb"],
@@ -582,14 +582,14 @@ def _build_section_d2_sstb(variables: Dict, parameters: Dict) -> LawSection:
     """§199A(d)(2) - Specified service trade or business."""
     return LawSection(
         id="sec_d2_sstb",
-        section_number="199A(d)(2)",
+        section_number="199A(d)(2), (d)(3)",
         title="Specified Service Trade or Business (SSTB)",
-        description="SSTBs include health, law, accounting, actuarial science, performing arts, consulting, athletics, financial services, brokerage, and any business where principal asset is reputation/skill. SSTBs get NO deduction above the phase-out range, but are eligible below threshold.",
+        description="SSTBs include health, law, accounting, actuarial science, performing arts, consulting, athletics, financial services, brokerage, and any business where principal asset is reputation/skill. Engineering and architecture, which are SSTBs under §1202(e)(3)(A), are explicitly carved out by §199A(d)(2)(A). Per §199A(d)(3), SSTBs phase out the deduction proportionally above the threshold and receive no deduction above threshold + phase-out range.",
         legal_reference=LegalReference(
-            section="199A(d)(2)",
-            title="Specified service trade or business",
+            section="199A(d)(2), (d)(3)",
+            title="Specified service trade or business; applicable percentage",
             url=f"{CORNELL_BASE}#d_2",
-            text="The term 'specified service trade or business' means any trade or business... which involves the performance of services in the fields of health, law, accounting, actuarial science, performing arts, consulting, athletics, financial services, brokerage services..."
+            text="The term 'specified service trade or business' means any trade or business... which involves the performance of services in the fields of health, law, accounting, actuarial science, performing arts, consulting, athletics, financial services, brokerage services... §199A(d)(3) provides that for taxpayers above the threshold, the deduction is reduced by the 'applicable percentage' equal to 1 minus the phase-in fraction."
         ),
         status=ImplementationStatus.COMPLETE,
         inputs=[
@@ -976,7 +976,7 @@ def _build_adjacent_sections() -> List[AdjacentSection]:
             section_number="§1202(e)(3)(A)",
             title="Specified Service Trade or Business Definition",
             description="Defines the categories of 'specified service trades or businesses' (SSTBs) that face deduction limitations under §199A.",
-            relevance_to_qbid="§199A(d)(2) incorporates this definition to identify SSTBs whose owners cannot claim QBID above the income threshold.",
+            relevance_to_qbid="§199A(d)(2) incorporates this definition to identify SSTBs whose owners cannot claim QBID above the income threshold. Note: engineering and architecture, which §1202(e)(3)(A) lists, are explicitly carved out of the §199A SSTB definition.",
             legal_reference=LegalReference(
                 section="1202(e)(3)(A)",
                 title="Qualified small business stock - Excluded businesses",
@@ -984,18 +984,15 @@ def _build_adjacent_sections() -> List[AdjacentSection]:
                 text="The term 'qualified trade or business' shall not include any trade or business involving the performance of services in the fields of health, law, engineering, architecture, accounting, actuarial science, performing arts, consulting, athletics, financial services, brokerage services..."
             ),
             status=ImplementationStatus.COMPLETE,
-            status_notes="PolicyEngine fully implements SSTB handling via business_is_sstb boolean. The phase-out calculation correctly applies the SSTB reduction factor (1-reduction_rate) to zero out SSTB income above threshold.",
+            status_notes="PolicyEngine fully implements SSTB handling. The applicable-percentage phase-out (1 - reduction_rate) is applied to the SSTB-only QBI bucket, while non-SSTB QBI is computed in parallel without the phase-out.",
             key_provisions=[
-                "Health services",
-                "Law",
-                "Accounting",
-                "Actuarial science",
-                "Performing arts",
-                "Consulting",
-                "Athletics",
-                "Financial services",
-                "Brokerage services",
-                "Any business where principal asset is reputation/skill of employees"
+                "§199A SSTB list (subset of §1202(e)(3)(A)):",
+                "Health, law, accounting, actuarial science",
+                "Performing arts, consulting, athletics",
+                "Financial services, brokerage services",
+                "Investing/investment management, trading, dealing in securities",
+                "Any business where principal asset is reputation/skill of employees",
+                "§199A excludes engineering and architecture (§199A(d)(2)(A))",
             ],
             variables_used=["business_is_sstb"],
             github_url=f"{GITHUB_BASE}/policyengine_us/variables/household/income/person/self_employment/business_is_sstb.py",
@@ -1041,8 +1038,8 @@ def _build_adjacent_sections() -> List[AdjacentSection]:
                 url="https://www.law.cornell.edu/uscode/text/26/857#b_3",
                 text="For purposes of this title, a capital gain dividend is any dividend, or part thereof, which is designated by the real estate investment trust as a capital gain dividend..."
             ),
-            status=ImplementationStatus.PARTIAL,
-            status_notes="PolicyEngine has 'qualified_reit_and_ptp_income' variable BUT it is NOT connected to the QBID calculation. The documentation misleadingly says 'Part of QBID calculation' but the variable is unused. REIT dividends should get a separate 20% deduction added to the final QBID.",
+            status=ImplementationStatus.COMPLETE,
+            status_notes="PolicyEngine implements REIT/PTP component in qbid_amount.py: 20% × qualified_reit_and_ptp_income is added to the per-person QBID without wage or UBIA limits. Loss carryforward (Form 8995 line 7) is not separately tracked.",
             key_provisions=[
                 "Qualified REIT dividends = ordinary REIT dividends (not capital gain dividends)",
                 "20% deduction applies without W-2 wage limitation",
@@ -1068,8 +1065,8 @@ def _build_adjacent_sections() -> List[AdjacentSection]:
                 url="https://www.law.cornell.edu/uscode/text/26/7704",
                 text="A publicly traded partnership shall be treated as a corporation... interests in such partnership are traded on an established securities market, or are readily tradable on a secondary market."
             ),
-            status=ImplementationStatus.PARTIAL,
-            status_notes="PolicyEngine has 'qualified_reit_and_ptp_income' variable (combines both) BUT it is NOT used in QBID calculation. Should be added to final deduction as: QBID = Combined QBI Component + 20% × REIT/PTP Income.",
+            status=ImplementationStatus.COMPLETE,
+            status_notes="PolicyEngine combines REIT and PTP income into a single variable (qualified_reit_and_ptp_income). qbid_amount.py applies the 20% rate (gov.irs.deductions.qbi.max.reit_ptp_rate) to this combined input and adds it to the final per-person QBID. Loss carryforward (Form 8995 line 7) is not separately tracked.",
             key_provisions=[
                 "PTP = partnership traded on established securities market",
                 "Qualified PTP income = ordinary income from PTP (not SSTB)",
@@ -1078,7 +1075,7 @@ def _build_adjacent_sections() -> List[AdjacentSection]:
                 "PTP losses reduce PTP income component (not QBI from other businesses)",
                 "Reported on Schedule K-1"
             ],
-            variables_used=[],
+            variables_used=["qualified_reit_and_ptp_income"],
             referenced_by=["199A(b)(1)(B)", "199A(e)(4)"]
         ),
 
