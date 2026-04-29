@@ -184,7 +184,7 @@ function OverviewTab({ data }: { data: FormMappingResponse }) {
                 </div>
 
                 <div className="text-sm text-pe-text-tertiary">
-                  <div>Thresholds (2024):</div>
+                  <div>Thresholds ({form.tax_year}):</div>
                   <div className="font-mono">
                     Single: ${form.threshold_single.toLocaleString()} | Joint: ${form.threshold_joint.toLocaleString()}
                   </div>
