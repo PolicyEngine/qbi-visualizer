@@ -1,7 +1,6 @@
 """Application configuration."""
 
 from pathlib import Path
-from typing import Optional
 
 from pydantic_settings import BaseSettings
 
@@ -17,10 +16,6 @@ class Settings(BaseSettings):
     # Local Paths
     REPOS_DIR: Path = Path("./data/repos")
     CACHE_DIR: Path = Path("./data/cache")
-
-    # TAXSIM Integration (Optional)
-    TAXSIM_PATH: Optional[Path] = None
-    TAXSIM_EXECUTABLE: str = "taxsim35"
 
     # API Configuration
     API_TITLE: str = "QBI Visualizer API"
