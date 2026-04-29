@@ -217,7 +217,7 @@ function buildStages(outputs: Outputs): Stage[] {
   ];
 }
 
-function ComputationCascade({ outputs }: { outputs: Outputs }) {
+function MathExpansion({ outputs }: { outputs: Outputs }) {
   const nonSstb = num(outputs, 'qualified_business_income');
   const sstb = num(outputs, 'sstb_qualified_business_income');
   const totalQbi = nonSstb + sstb;
@@ -229,199 +229,248 @@ function ComputationCascade({ outputs }: { outputs: Outputs }) {
   const qbiComponentMax = 0.20 * Math.max(0, totalQbi);
   const reitPtpComponent = 0.20 * Math.max(0, reitPtp);
   const unconstrained = qbiComponentMax + reitPtpComponent;
-  const businessComponents = Math.max(0, qbidAmount - reitPtpComponent);
-  const incomeLimit = 0.20 * Math.max(0, tiBefore - netCapGain);
+  const tiLessCapGain = Math.max(0, tiBefore - netCapGain);
+  const incomeLimit = 0.20 * tiLessCapGain;
   const finalQbid = Math.min(qbidAmount, incomeLimit);
   const reductionFromCaps = Math.max(0, unconstrained - qbidAmount);
-  const qbiDeductionBinds = qbidAmount <= incomeLimit;
 
   if (qbidAmount === 0 && incomeLimit === 0 && totalQbi === 0) return null;
 
-  // Two scales — one for QBI-side bars (cap at Total QBI), one for QBID-side
-  // bars (cap at the larger of the two competing ceilings). This keeps the
-  // visual range usable when QBI is much larger than 20%×QBI.
-  const qbiScaleMax = Math.max(totalQbi, 1);
-  const qbidScaleMax = Math.max(unconstrained, incomeLimit, 1);
-  const qbiPct = (v: number) => `${Math.min(100, (v / qbiScaleMax) * 100)}%`;
-  const qbidPct = (v: number) => `${Math.min(100, (v / qbidScaleMax) * 100)}%`;
+  // Style helpers for the substitution lines
+  const Mono = ({ children, color }: { children: React.ReactNode; color?: string }) => (
+    <span className={`font-mono ${color ?? 'text-pe-text-primary'}`}>{children}</span>
+  );
+  const Op = ({ children }: { children?: React.ReactNode }) => (
+    <span className="text-pe-text-tertiary mx-1">{children ?? ' '}</span>
+  );
 
   return (
     <div className="mb-6 bg-white rounded-pe-lg border border-pe-gray-200 p-5">
-      <div className="flex items-baseline justify-between mb-1">
-        <h3 className="text-sm font-semibold text-pe-text-primary">Computation cascade</h3>
-        <span className="text-xs text-pe-text-tertiary">how the QBI deduction is built and capped</span>
-      </div>
-      <p className="text-xs text-pe-text-tertiary mb-5">
-        Bars in each block share a scale. The shorter bar in the comparison block sets the final QBID.
+      <h3 className="text-sm font-semibold text-pe-text-primary mb-1">Final QBID, expanded</h3>
+      <p className="text-xs text-pe-text-tertiary mb-4">
+        Each line substitutes one set of values into the §199A formula.
       </p>
-
-      {/* Block 1 — Total QBI buildup */}
-      <div className="space-y-3 pb-5 mb-5 border-b border-pe-gray-100">
-        <div className="text-[11px] uppercase tracking-wider text-pe-text-tertiary font-semibold">
-          1 · QBI buildup
-        </div>
-        <ConstraintBar
-          label="Total QBI"
-          formLine="L4"
-          value={totalQbi}
-          pct={qbiPct}
-          segments={[
-            { label: 'Non-SSTB QBI', value: nonSstb, color: 'bg-pe-teal-500' },
-            { label: 'SSTB QBI', value: sstb, color: 'bg-amber-500' },
-          ]}
-        />
-      </div>
-
-      {/* Block 2 — From QBI to QBI deduction */}
-      <div className="space-y-3 pb-5 mb-5 border-b border-pe-gray-100">
-        <div className="text-[11px] uppercase tracking-wider text-pe-text-tertiary font-semibold">
-          2 · 20% rate, wage / SSTB caps, REIT/PTP component
-        </div>
-        <ConstraintBar
-          label="20% × Total QBI"
-          formLine="L5"
-          value={qbiComponentMax}
-          pct={qbidPct}
-          segments={[
-            { label: '20% × Total QBI', value: qbiComponentMax, color: 'bg-pe-teal-300' },
-          ]}
-        />
-        <ConstraintBar
-          label="QBI deduction"
-          formLine="L10"
-          value={qbidAmount}
-          ghost={reductionFromCaps > 0 ? unconstrained : undefined}
-          ghostLabel={reductionFromCaps > 0 ? `before −$${Math.round(reductionFromCaps).toLocaleString()} wage / SSTB cap` : undefined}
-          pct={qbidPct}
-          segments={[
-            { label: 'Non-SSTB + SSTB components', value: businessComponents, color: 'bg-pe-teal-500' },
-            { label: '20% × REIT/PTP', value: reitPtpComponent, color: 'bg-pe-blue-500' },
-          ]}
-        />
-      </div>
-
-      {/* Block 3 — Final min() */}
-      <div className="space-y-3">
-        <div className="text-[11px] uppercase tracking-wider text-pe-text-tertiary font-semibold">
-          3 · Final QBID = min(QBI deduction, income limit)
-        </div>
-        <ConstraintBar
-          label="QBI deduction"
-          formLine="L10"
-          value={qbidAmount}
-          binding={qbiDeductionBinds && qbidAmount > 0}
-          pct={qbidPct}
-          segments={[
-            { label: 'Non-SSTB + SSTB components', value: businessComponents, color: 'bg-pe-teal-500' },
-            { label: '20% × REIT/PTP', value: reitPtpComponent, color: 'bg-pe-blue-500' },
-          ]}
-        />
-        <ConstraintBar
-          label="Income limit"
-          formLine="L14"
-          value={incomeLimit}
-          binding={!qbiDeductionBinds && incomeLimit > 0}
-          pct={qbidPct}
-          segments={[
-            { label: '20% × max(0, TI − net capital gain)', value: incomeLimit, color: 'bg-pe-gray-500' },
-          ]}
-        />
-      </div>
-
-      <div className="mt-5 pt-4 border-t border-pe-gray-100 flex items-baseline justify-between">
+      <div className="font-mono text-sm space-y-2 leading-relaxed bg-pe-gray-50 rounded-pe-md border border-pe-gray-100 p-4 overflow-x-auto">
         <div>
-          <div className="text-sm text-pe-text-secondary">Final QBID</div>
-          <div className="text-[11px] text-pe-text-tertiary">
-            {qbiDeductionBinds
-              ? 'QBI deduction is the lower ceiling — wage caps or SSTB phase-out limited the deduction.'
-              : 'Income limit is the lower ceiling — taxable income is the binding constraint.'}
-          </div>
+          <Mono color="text-pe-text-tertiary">Final QBID</Mono>
+          <Op>=</Op>
+          <Mono color="text-pe-text-tertiary">min(QBI deduction, income limit)</Mono>
         </div>
-        <span className="text-2xl font-semibold tabular-nums text-pe-teal-600">{formatCurrency(finalQbid)}</span>
-      </div>
-    </div>
-  );
-}
-
-interface ConstraintBarSegment {
-  label: string;
-  value: number;
-  color: string; // tailwind bg-* class
-}
-
-function ConstraintBar({
-  label,
-  formLine,
-  value,
-  ghost,
-  ghostLabel,
-  binding,
-  pct,
-  segments,
-}: {
-  label: string;
-  formLine: string;
-  value: number;
-  ghost?: number;
-  ghostLabel?: string;
-  binding?: boolean;
-  pct: (v: number) => string;
-  segments: ConstraintBarSegment[];
-}) {
-  const positiveSegments = segments.filter((s) => s.value > 0);
-  return (
-    <div>
-      <div className="flex items-baseline justify-between mb-1.5">
-        <div className="flex items-baseline gap-2">
-          <span className="text-sm font-medium text-pe-text-primary">{label}</span>
-          <span className="text-[10px] font-mono text-pe-text-tertiary">{formLine}</span>
-        </div>
-        <div className="flex items-baseline gap-2">
-          <span className={`text-sm font-semibold tabular-nums ${binding ? 'text-pe-teal-600' : 'text-pe-text-primary'}`}>
-            {formatCurrency(value)}
-          </span>
-          {binding && (
-            <span className="text-[10px] uppercase tracking-wider font-semibold text-pe-teal-600">
-              ← binds
-            </span>
+        <div className="pl-6">
+          <Op>=</Op>
+          <Mono color="text-pe-text-tertiary">min(</Mono>
+          <Mono>0.20·{formatCurrency(totalQbi)}</Mono>
+          {reductionFromCaps > 0 && (
+            <>
+              <Op>−</Op>
+              <Mono color="text-pe-error">{formatCurrency(reductionFromCaps)}</Mono>
+              <span className="text-[10px] text-pe-text-tertiary"> wage/SSTB cap</span>
+            </>
           )}
+          <Op>+</Op>
+          <Mono>0.20·{formatCurrency(reitPtp)}</Mono>
+          <span className="text-[10px] text-pe-text-tertiary"> REIT/PTP</span>
+          <Mono color="text-pe-text-tertiary">,</Mono>
+          <Op />
+          <Mono>0.20·max(0, {formatCurrency(tiBefore)} − {formatCurrency(netCapGain)})</Mono>
+          <Mono color="text-pe-text-tertiary">)</Mono>
+        </div>
+        <div className="pl-6">
+          <Op>=</Op>
+          <Mono color="text-pe-text-tertiary">min(</Mono>
+          <Mono color={qbidAmount <= incomeLimit ? 'text-pe-teal-600 font-semibold' : 'text-pe-text-primary'}>
+            {formatCurrency(qbidAmount)}
+          </Mono>
+          <Mono color="text-pe-text-tertiary">,</Mono>
+          <Op />
+          <Mono color={incomeLimit < qbidAmount ? 'text-pe-teal-600 font-semibold' : 'text-pe-text-primary'}>
+            {formatCurrency(incomeLimit)}
+          </Mono>
+          <Mono color="text-pe-text-tertiary">)</Mono>
+        </div>
+        <div className="pl-6 pt-2 border-t border-pe-gray-200">
+          <Op>=</Op>
+          <Mono color="text-pe-teal-600">{formatCurrency(finalQbid)}</Mono>
         </div>
       </div>
-      <div className="relative h-7 bg-pe-gray-50 rounded">
-        {ghost !== undefined && ghost > value && (
-          <div
-            className="absolute inset-y-0 left-0 rounded bg-pe-gray-100 border-r-2 border-dashed border-pe-gray-300"
-            style={{ width: pct(ghost) }}
-            title={ghostLabel}
-          />
-        )}
-        <div
-          className={`absolute inset-y-0 left-0 flex rounded overflow-hidden ${binding ? 'ring-2 ring-pe-teal-500' : ''}`}
-          style={{ width: pct(Math.max(value, 0.01)) }}
-        >
-          {positiveSegments.map((s) => (
-            <div
-              key={s.label}
-              className={s.color}
-              style={{ width: `${(s.value / value) * 100}%` }}
-              title={`${s.label}: ${formatCurrency(s.value)}`}
-            />
-          ))}
-        </div>
-      </div>
-      {positiveSegments.length > 1 && (
-        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
-          {positiveSegments.map((s) => (
-            <span key={s.label} className="inline-flex items-center gap-1.5 text-[11px] text-pe-text-tertiary">
-              <span className={`inline-block w-2 h-2 rounded-sm ${s.color}`} />
-              {s.label} {formatCurrency(s.value)}
-            </span>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
+
+function CeilingChart({ outputs }: { outputs: Outputs }) {
+  const nonSstb = num(outputs, 'qualified_business_income');
+  const sstb = num(outputs, 'sstb_qualified_business_income');
+  const totalQbi = nonSstb + sstb;
+  const reitPtp = num(outputs, 'qualified_reit_and_ptp_income');
+  const qbidAmount = num(outputs, 'qbid_amount');
+  const tiBefore = num(outputs, 'taxable_income_less_qbid');
+  const netCapGain = num(outputs, 'adjusted_net_capital_gain');
+
+  const qbiComponentMax = 0.20 * Math.max(0, totalQbi);
+  const reitPtpComponent = 0.20 * Math.max(0, reitPtp);
+  const unconstrained = qbiComponentMax + reitPtpComponent;
+  const incomeLimit = 0.20 * Math.max(0, tiBefore - netCapGain);
+  const finalQbid = Math.min(qbidAmount, incomeLimit);
+
+  if (qbidAmount === 0 && incomeLimit === 0) return null;
+
+  type Ceiling = { label: string; value: number; sublabel?: string };
+  const allCeilings: Ceiling[] = [
+    { label: '20% × Total QBI', value: unconstrained, sublabel: 'before wage / SSTB caps' },
+    { label: 'QBI deduction', value: qbidAmount, sublabel: 'L10 — after wage / SSTB caps' },
+    { label: 'Income limit', value: incomeLimit, sublabel: 'L14 — 20% × (TI − net cap gain)' },
+  ];
+  // Drop ceilings that are essentially equal to "QBI deduction" (e.g., when no
+  // caps applied, the unconstrained value equals qbidAmount — show one bar).
+  const ceilings: Ceiling[] = [];
+  for (const c of allCeilings) {
+    const dup = ceilings.find((existing) => Math.abs(existing.value - c.value) < 1);
+    if (dup) {
+      // Merge labels onto the existing entry
+      dup.label = `${dup.label} = ${c.label}`;
+    } else {
+      ceilings.push(c);
+    }
+  }
+  ceilings.sort((a, b) => b.value - a.value); // tallest first for layering
+
+  const minValue = Math.min(...ceilings.map((c) => c.value));
+  const yMax = Math.max(...ceilings.map((c) => c.value)) * 1.15;
+
+  // SVG geometry
+  const width = 640;
+  const height = 360;
+  const padTop = 24;
+  const padBottom = 36;
+  const colWaterX = 96;
+  const colWaterW = 80;
+  const lineStartX = 60;
+  const lineEndX = width - 12;
+  const drawableH = height - padTop - padBottom;
+  const yFor = (val: number) => padTop + drawableH * (1 - val / yMax);
+
+  const waterTopY = yFor(finalQbid);
+  const waterBottomY = padTop + drawableH;
+
+  // Y-axis ticks (round numbers)
+  const tickStep = niceStep(yMax / 5);
+  const ticks: number[] = [];
+  for (let v = 0; v <= yMax; v += tickStep) ticks.push(v);
+
+  return (
+    <div className="mb-6 bg-white rounded-pe-lg border border-pe-gray-200 p-5">
+      <h3 className="text-sm font-semibold text-pe-text-primary mb-1">Lowest ceiling wins</h3>
+      <p className="text-xs text-pe-text-tertiary mb-4">
+        Each constraint is a ceiling on the QBID; the water rises to the lowest one.
+      </p>
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full" preserveAspectRatio="xMidYMid meet">
+        {/* Y-axis tick lines + labels */}
+        {ticks.map((t) => (
+          <g key={t}>
+            <line x1={lineStartX} y1={yFor(t)} x2={lineEndX} y2={yFor(t)} stroke="#F2F4F7" strokeWidth={1} />
+            <text x={lineStartX - 6} y={yFor(t) + 4} textAnchor="end" className="fill-pe-text-tertiary" fontSize="10" fontFamily="ui-monospace, monospace">
+              ${formatThousands(t)}
+            </text>
+          </g>
+        ))}
+
+        {/* Water column */}
+        <rect
+          x={colWaterX}
+          y={waterTopY}
+          width={colWaterW}
+          height={Math.max(0, waterBottomY - waterTopY)}
+          fill="#319795"
+          fillOpacity="0.15"
+          stroke="#319795"
+          strokeOpacity="0.4"
+          strokeWidth="1"
+        />
+        {/* "Water surface" line on top of column */}
+        <line
+          x1={colWaterX - 4}
+          y1={waterTopY}
+          x2={colWaterX + colWaterW + 4}
+          y2={waterTopY}
+          stroke="#319795"
+          strokeWidth="2"
+        />
+
+        {/* Ceiling lines */}
+        {ceilings.map((c) => {
+          const isBinding = Math.abs(c.value - minValue) < 1;
+          const y = yFor(c.value);
+          return (
+            <g key={c.label}>
+              <line
+                x1={lineStartX}
+                y1={y}
+                x2={lineEndX}
+                y2={y}
+                stroke={isBinding ? '#319795' : '#9CA3AF'}
+                strokeWidth={isBinding ? 2 : 1.5}
+                strokeDasharray={isBinding ? undefined : '4 3'}
+              />
+              {/* Label box on the right */}
+              <g transform={`translate(${colWaterX + colWaterW + 12}, ${y - 8})`}>
+                <text
+                  x={0}
+                  y={0}
+                  className={isBinding ? 'fill-pe-teal-600 font-semibold' : 'fill-pe-text-secondary'}
+                  fontSize="11"
+                >
+                  {c.label} {isBinding && '★ binds'}
+                </text>
+                {c.sublabel && (
+                  <text x={0} y={12} className="fill-pe-text-tertiary" fontSize="10">
+                    {c.sublabel}
+                  </text>
+                )}
+                <text x={0} y={26} className={isBinding ? 'fill-pe-teal-700 font-semibold' : 'fill-pe-text-primary'} fontSize="11" fontFamily="ui-monospace, monospace">
+                  {formatCurrency(c.value)}
+                </text>
+              </g>
+            </g>
+          );
+        })}
+
+        {/* "Final QBID" annotation at the water surface */}
+        <text
+          x={colWaterX + colWaterW / 2}
+          y={waterTopY - 6}
+          textAnchor="middle"
+          className="fill-pe-teal-700 font-semibold"
+          fontSize="11"
+        >
+          Final QBID {formatCurrency(finalQbid)}
+        </text>
+
+        {/* X-axis baseline */}
+        <line x1={lineStartX} y1={waterBottomY} x2={lineEndX} y2={waterBottomY} stroke="#CBD5E1" strokeWidth={1.5} />
+      </svg>
+    </div>
+  );
+}
+
+function niceStep(rough: number): number {
+  // Round to a "nice" tick step (1, 2, 2.5, 5 × 10^n)
+  if (rough <= 0) return 1;
+  const exp = Math.floor(Math.log10(rough));
+  const base = rough / Math.pow(10, exp);
+  let nice;
+  if (base < 1.5) nice = 1;
+  else if (base < 3) nice = 2;
+  else if (base < 7) nice = 5;
+  else nice = 10;
+  return nice * Math.pow(10, exp);
+}
+
+function formatThousands(val: number): string {
+  if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(val % 1_000_000 === 0 ? 0 : 1)}M`;
+  if (val >= 1_000) return `${(val / 1_000).toFixed(val % 1_000 === 0 ? 0 : 1)}k`;
+  return `${val}`;
+}
+
 
 function BreakdownStaged({ outputs }: { outputs: Outputs }) {
   const stages = buildStages(outputs);
@@ -742,8 +791,11 @@ export default function CalculatorView() {
             {/* QBI Breakdown — staged */}
             <BreakdownStaged outputs={result.outputs} />
 
-            {/* Visual cascade summary */}
-            <ComputationCascade outputs={result.outputs} />
+            {/* Math expansion — textbook-style derivation */}
+            <MathExpansion outputs={result.outputs} />
+
+            {/* Ceiling chart — geometric "lowest wins" view */}
+            <CeilingChart outputs={result.outputs} />
 
             {/* Parameters Used — collapsible */}
             {result.parameters && Object.keys(result.parameters).length > 0 && (
