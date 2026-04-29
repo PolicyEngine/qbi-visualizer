@@ -282,6 +282,7 @@ export default function CalculatorView() {
     // income, below the 2025 threshold ($197,300), so no wage/UBIA cap and
     // no SSTB phase-out — yields ~$18.6k QBID, capped only by taxable income.
     defaults.self_employment_income = 100_000;
+    defaults.w2_wages_from_qualified_business = 1_000_000;
     return defaults;
   };
 
