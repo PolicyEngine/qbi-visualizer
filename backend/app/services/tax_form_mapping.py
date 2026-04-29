@@ -65,10 +65,9 @@ def build_form_8995_mapping() -> TaxFormMapping:
             line_number="6",
             line_label="Qualified REIT dividends and publicly traded partnership (PTP) income or (loss)",
             description="REIT dividends and PTP ordinary income",
-            status=ImplementationStatus.PARTIAL,
+            status=ImplementationStatus.COMPLETE,
             pe_variable="qualified_reit_and_ptp_income",
-            pe_formula="Variable EXISTS but is NOT connected to QBID calculation",
-            gap_description="PE has this variable but doesn't use it in the final QBID formula",
+            pe_formula="qualified_reit_and_ptp_income (combined input variable)",
             form_instructions="Enter qualified REIT dividends and qualified PTP income or (loss)"
         ),
         FormLineMapping(
@@ -83,26 +82,28 @@ def build_form_8995_mapping() -> TaxFormMapping:
             line_number="8",
             line_label="Total qualified REIT dividends and PTP income",
             description="Line 6 + Line 7",
-            status=ImplementationStatus.MISSING,
-            gap_description="Not calculated since components not connected",
+            status=ImplementationStatus.PARTIAL,
+            pe_variable="qualified_reit_and_ptp_income",
+            pe_formula="Equals Line 6 only; Line 7 carryforward is not tracked",
+            gap_description="REIT/PTP loss carryforward (Line 7) is not tracked in PolicyEngine",
             form_instructions="Add lines 6 and 7"
         ),
         FormLineMapping(
             line_number="9",
             line_label="REIT and PTP component",
             description="20% of Line 8 (if positive)",
-            status=ImplementationStatus.MISSING,
-            gap_description="Should be 0.20 × REIT/PTP income, added to final QBID",
+            status=ImplementationStatus.COMPLETE,
+            pe_variable="qbid_amount (REIT/PTP component)",
+            pe_formula="reit_ptp_rate × max(0, qualified_reit_and_ptp_income)",
             form_instructions="Multiply line 8 by 20% (0.20). If line 8 is less than zero, enter -0-"
         ),
         FormLineMapping(
             line_number="10",
             line_label="Qualified business income deduction before income limitation",
             description="Line 5 + Line 9",
-            status=ImplementationStatus.PARTIAL,
-            pe_variable="qbid_amount (summed)",
-            pe_formula="sum(qbid_amount) - missing REIT/PTP component",
-            gap_description="Missing the REIT/PTP component from Line 9",
+            status=ImplementationStatus.COMPLETE,
+            pe_variable="qbid_amount (summed across persons)",
+            pe_formula="non_sstb_component + sstb_component + reit_ptp_component",
             form_instructions="Add lines 5 and 9"
         ),
         FormLineMapping(
@@ -143,10 +144,9 @@ def build_form_8995_mapping() -> TaxFormMapping:
             line_number="15",
             line_label="Qualified business income deduction",
             description="Smaller of Line 10 or Line 14",
-            status=ImplementationStatus.PARTIAL,
+            status=ImplementationStatus.COMPLETE,
             pe_variable="qualified_business_income_deduction",
-            pe_formula="min(uncapped_qbid, taxinc_cap)",
-            gap_description="Line 10 is missing REIT/PTP component, so final deduction may be understated",
+            pe_formula="min(uncapped_qbid, taxinc_cap), then max with 2026+ minimum-deduction floor",
             form_instructions="Enter the smaller of line 10 or line 14"
         ),
         FormLineMapping(
@@ -174,11 +174,11 @@ def build_form_8995_mapping() -> TaxFormMapping:
     return TaxFormMapping(
         form_number="8995",
         form_title="Qualified Business Income Deduction Simplified Computation",
-        tax_year=2024,
+        tax_year=2025,
         description="Use this form if your taxable income is at or below the threshold and you're not a patron of an agricultural cooperative.",
-        who_can_use="Taxpayers with taxable income at or below $191,950 (single) or $383,900 (MFJ) who have QBI, qualified REIT dividends, or qualified PTP income",
-        threshold_single=191950,
-        threshold_joint=383900,
+        who_can_use="Taxpayers with taxable income at or below $197,300 (single) or $394,600 (MFJ) who have QBI, qualified REIT dividends, or qualified PTP income",
+        threshold_single=197300,
+        threshold_joint=394600,
         irs_url="https://www.irs.gov/pub/irs-pdf/f8995.pdf",
         instructions_url="https://www.irs.gov/instructions/i8995",
         total_lines=len(lines),
@@ -225,9 +225,9 @@ def build_form_8995a_mapping() -> TaxFormMapping:
             line_number="Part IV",
             line_label="Determine Your Qualified Business Income Deduction",
             description="Final QBID calculation combining QBI and REIT/PTP components",
-            status=ImplementationStatus.PARTIAL,
+            status=ImplementationStatus.COMPLETE,
             pe_variable="qualified_business_income_deduction",
-            gap_description="Missing REIT/PTP component addition",
+            pe_formula="non_sstb + sstb + reit_ptp components, capped at 20% × (taxable income − net capital gain), with 2026+ minimum-deduction floor",
             form_instructions="Combine QBI component with REIT/PTP component, apply income limit"
         ),
     ]
@@ -393,11 +393,11 @@ def build_form_8995a_mapping() -> TaxFormMapping:
     return TaxFormMapping(
         form_number="8995-A",
         form_title="Qualified Business Income Deduction",
-        tax_year=2024,
+        tax_year=2025,
         description="Use this form if your taxable income exceeds the threshold, you have SSTB income in the phase-in range, or you're a patron of an agricultural cooperative.",
-        who_can_use="Taxpayers with taxable income above $191,950 (single) or $383,900 (MFJ), or with SSTB income in phase-in range, or cooperative patrons",
-        threshold_single=191950,
-        threshold_joint=383900,
+        who_can_use="Taxpayers with taxable income above $197,300 (single) or $394,600 (MFJ), or with SSTB income in phase-in range, or cooperative patrons",
+        threshold_single=197300,
+        threshold_joint=394600,
         irs_url="https://www.irs.gov/pub/irs-pdf/f8995a.pdf",
         instructions_url="https://www.irs.gov/instructions/i8995a",
         total_lines=len(all_lines) + sum(len(s.lines) for s in all_schedules),
@@ -420,14 +420,6 @@ def build_form_mapping_response() -> FormMappingResponse:
     total_missing = form_8995.missing_lines + form_8995a.missing_lines
 
     critical_gaps = [
-        {
-            "id": "reit_ptp",
-            "title": "REIT/PTP Component Not Connected",
-            "form_lines": "Form 8995 Lines 6-9",
-            "description": "The qualified_reit_and_ptp_income variable exists but is NOT added to the final QBID. Anyone with REIT dividends or PTP income is missing their 20% deduction on that portion.",
-            "impact": "High - affects all taxpayers with REIT mutual funds or PTP investments",
-            "fix_complexity": "Low - just add the component to the final formula"
-        },
         {
             "id": "loss_carryforward",
             "title": "QBI Loss Carryforward Not Implemented",
@@ -501,9 +493,21 @@ def build_form_mapping_response() -> FormMappingResponse:
         },
         {
             "id": "thresholds",
-            "title": "2024 Thresholds",
+            "title": "Inflation-Adjusted Thresholds",
             "form_lines": "Instructions",
-            "description": "$191,950 (single) and $383,900 (MFJ) thresholds are correctly parameterized and inflation-adjusted"
+            "description": "Phase-out start thresholds (e.g., $197,300 single / $394,600 MFJ for 2025) are correctly parameterized and inflation-adjusted"
+        },
+        {
+            "id": "reit_ptp",
+            "title": "REIT/PTP Component",
+            "form_lines": "Form 8995 Lines 6-9; Form 8995-A Part IV",
+            "description": "20% of qualified_reit_and_ptp_income is added to the per-person QBID without wage or UBIA limits, matching §199A(b)(1)(B)"
+        },
+        {
+            "id": "minimum_floor",
+            "title": "Minimum Deduction Floor (2026+)",
+            "form_lines": "§199A(i) per OBBBA (2025)",
+            "description": "$400 minimum deduction for taxpayers with at least $1,000 of QBI, effective starting 2026"
         },
         {
             "id": "phaseout_range",

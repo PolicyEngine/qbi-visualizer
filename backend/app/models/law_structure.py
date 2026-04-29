@@ -120,7 +120,7 @@ class QBIDLawStructure(BaseModel):
 
     title: str = "26 U.S.C. § 199A - Qualified Business Income Deduction"
     effective_date: str = "2018-01-01"
-    sunset_date: Optional[str] = "2025-12-31"  # TCJA sunset
+    sunset_date: Optional[str] = None
 
     # Summary statistics
     total_sections: int
