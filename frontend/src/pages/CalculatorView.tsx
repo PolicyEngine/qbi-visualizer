@@ -217,7 +217,7 @@ function buildStages(outputs: Outputs): Stage[] {
   ];
 }
 
-function ConstraintChart({ outputs }: { outputs: Outputs }) {
+function ComputationCascade({ outputs }: { outputs: Outputs }) {
   const nonSstb = num(outputs, 'qualified_business_income');
   const sstb = num(outputs, 'sstb_qualified_business_income');
   const totalQbi = nonSstb + sstb;
@@ -226,53 +226,102 @@ function ConstraintChart({ outputs }: { outputs: Outputs }) {
   const tiBefore = num(outputs, 'taxable_income_less_qbid');
   const netCapGain = num(outputs, 'adjusted_net_capital_gain');
 
-  const unconstrainedQbi = 0.20 * Math.max(0, totalQbi) + 0.20 * Math.max(0, reitPtp);
+  const qbiComponentMax = 0.20 * Math.max(0, totalQbi);
   const reitPtpComponent = 0.20 * Math.max(0, reitPtp);
+  const unconstrained = qbiComponentMax + reitPtpComponent;
   const businessComponents = Math.max(0, qbidAmount - reitPtpComponent);
   const incomeLimit = 0.20 * Math.max(0, tiBefore - netCapGain);
   const finalQbid = Math.min(qbidAmount, incomeLimit);
-  const reductionFromCaps = Math.max(0, unconstrainedQbi - qbidAmount);
+  const reductionFromCaps = Math.max(0, unconstrained - qbidAmount);
   const qbiDeductionBinds = qbidAmount <= incomeLimit;
 
-  // Scale the chart so the longest bar (including ghost) is full width.
-  const maxVal = Math.max(unconstrainedQbi, incomeLimit, 1);
-  const pct = (val: number) => `${Math.min(100, (val / maxVal) * 100)}%`;
+  if (qbidAmount === 0 && incomeLimit === 0 && totalQbi === 0) return null;
 
-  if (qbidAmount === 0 && incomeLimit === 0) return null;
+  // Two scales — one for QBI-side bars (cap at Total QBI), one for QBID-side
+  // bars (cap at the larger of the two competing ceilings). This keeps the
+  // visual range usable when QBI is much larger than 20%×QBI.
+  const qbiScaleMax = Math.max(totalQbi, 1);
+  const qbidScaleMax = Math.max(unconstrained, incomeLimit, 1);
+  const qbiPct = (v: number) => `${Math.min(100, (v / qbiScaleMax) * 100)}%`;
+  const qbidPct = (v: number) => `${Math.min(100, (v / qbidScaleMax) * 100)}%`;
 
   return (
     <div className="mb-6 bg-white rounded-pe-lg border border-pe-gray-200 p-5">
       <div className="flex items-baseline justify-between mb-1">
-        <h3 className="text-sm font-semibold text-pe-text-primary">Which constraint binds?</h3>
-        <span className="text-xs text-pe-text-tertiary font-mono">min(QBI deduction, income limit)</span>
+        <h3 className="text-sm font-semibold text-pe-text-primary">Computation cascade</h3>
+        <span className="text-xs text-pe-text-tertiary">how the QBI deduction is built and capped</span>
       </div>
       <p className="text-xs text-pe-text-tertiary mb-5">
-        The shorter bar is the lower ceiling, so it sets the final QBID.
+        Bars in each block share a scale. The shorter bar in the comparison block sets the final QBID.
       </p>
 
-      <div className="space-y-4">
-        {/* QBI deduction bar */}
+      {/* Block 1 — Total QBI buildup */}
+      <div className="space-y-3 pb-5 mb-5 border-b border-pe-gray-100">
+        <div className="text-[11px] uppercase tracking-wider text-pe-text-tertiary font-semibold">
+          1 · QBI buildup
+        </div>
+        <ConstraintBar
+          label="Total QBI"
+          formLine="L4"
+          value={totalQbi}
+          pct={qbiPct}
+          segments={[
+            { label: 'Non-SSTB QBI', value: nonSstb, color: 'bg-pe-teal-500' },
+            { label: 'SSTB QBI', value: sstb, color: 'bg-amber-500' },
+          ]}
+        />
+      </div>
+
+      {/* Block 2 — From QBI to QBI deduction */}
+      <div className="space-y-3 pb-5 mb-5 border-b border-pe-gray-100">
+        <div className="text-[11px] uppercase tracking-wider text-pe-text-tertiary font-semibold">
+          2 · 20% rate, wage / SSTB caps, REIT/PTP component
+        </div>
+        <ConstraintBar
+          label="20% × Total QBI"
+          formLine="L5"
+          value={qbiComponentMax}
+          pct={qbidPct}
+          segments={[
+            { label: '20% × Total QBI', value: qbiComponentMax, color: 'bg-pe-teal-300' },
+          ]}
+        />
         <ConstraintBar
           label="QBI deduction"
           formLine="L10"
           value={qbidAmount}
-          ghost={reductionFromCaps > 0 ? unconstrainedQbi : undefined}
+          ghost={reductionFromCaps > 0 ? unconstrained : undefined}
           ghostLabel={reductionFromCaps > 0 ? `before −$${Math.round(reductionFromCaps).toLocaleString()} wage / SSTB cap` : undefined}
-          binding={qbiDeductionBinds && qbidAmount > 0}
-          pct={pct}
+          pct={qbidPct}
           segments={[
             { label: 'Non-SSTB + SSTB components', value: businessComponents, color: 'bg-pe-teal-500' },
             { label: '20% × REIT/PTP', value: reitPtpComponent, color: 'bg-pe-blue-500' },
           ]}
         />
+      </div>
 
-        {/* Income limit bar */}
+      {/* Block 3 — Final min() */}
+      <div className="space-y-3">
+        <div className="text-[11px] uppercase tracking-wider text-pe-text-tertiary font-semibold">
+          3 · Final QBID = min(QBI deduction, income limit)
+        </div>
+        <ConstraintBar
+          label="QBI deduction"
+          formLine="L10"
+          value={qbidAmount}
+          binding={qbiDeductionBinds && qbidAmount > 0}
+          pct={qbidPct}
+          segments={[
+            { label: 'Non-SSTB + SSTB components', value: businessComponents, color: 'bg-pe-teal-500' },
+            { label: '20% × REIT/PTP', value: reitPtpComponent, color: 'bg-pe-blue-500' },
+          ]}
+        />
         <ConstraintBar
           label="Income limit"
           formLine="L14"
           value={incomeLimit}
           binding={!qbiDeductionBinds && incomeLimit > 0}
-          pct={pct}
+          pct={qbidPct}
           segments={[
             { label: '20% × max(0, TI − net capital gain)', value: incomeLimit, color: 'bg-pe-gray-500' },
           ]}
@@ -315,7 +364,7 @@ function ConstraintBar({
   value: number;
   ghost?: number;
   ghostLabel?: string;
-  binding: boolean;
+  binding?: boolean;
   pct: (v: number) => string;
   segments: ConstraintBarSegment[];
 }) {
@@ -690,11 +739,11 @@ export default function CalculatorView() {
               </div>
             )}
 
-            {/* Constraint comparison */}
-            <ConstraintChart outputs={result.outputs} />
-
             {/* QBI Breakdown — staged */}
             <BreakdownStaged outputs={result.outputs} />
+
+            {/* Visual cascade summary */}
+            <ComputationCascade outputs={result.outputs} />
 
             {/* Parameters Used — collapsible */}
             {result.parameters && Object.keys(result.parameters).length > 0 && (
