@@ -118,6 +118,130 @@ interface CalcResult {
   filing_status: string;
 }
 
+type Outputs = CalcResult['outputs'];
+
+const num = (outputs: Outputs, name: string): number => {
+  const v = outputs[name];
+  return typeof v === 'number' ? v : 0;
+};
+
+interface StageRow {
+  name?: string; // PolicyEngine variable name (omitted for computed rows)
+  label: string;
+  value: number;
+  negative?: boolean; // Display with leading minus
+  computed?: boolean; // Derived client-side, not from PE
+}
+
+interface Stage {
+  title: string;
+  caption?: string;
+  total?: number;
+  totalLabel?: string;
+  rows: StageRow[];
+}
+
+function buildStages(outputs: Outputs): Stage[] {
+  const nonSstb = num(outputs, 'qualified_business_income');
+  const sstb = num(outputs, 'sstb_qualified_business_income');
+  const seTax = num(outputs, 'self_employment_tax_ald_person');
+  const seHealth = num(outputs, 'self_employed_health_insurance_ald_person');
+  const sePension = num(outputs, 'self_employed_pension_contribution_ald_person');
+  const qbidAmount = num(outputs, 'qbid_amount');
+  const tiBefore = num(outputs, 'taxable_income_less_qbid');
+  const netCapGain = num(outputs, 'adjusted_net_capital_gain');
+  const tiCap = 0.20 * Math.max(0, tiBefore - netCapGain);
+
+  return [
+    {
+      title: 'Qualified business income',
+      caption: 'Per-person QBI components after SE-tax / health / retirement allocations',
+      total: nonSstb + sstb,
+      totalLabel: 'Total QBI',
+      rows: [
+        { name: 'qualified_business_income', label: 'Non-SSTB QBI', value: nonSstb },
+        { name: 'sstb_qualified_business_income', label: 'SSTB QBI', value: sstb },
+        { name: 'self_employment_tax_ald_person', label: 'SE tax deduction (allocable)', value: seTax, negative: true },
+        { name: 'self_employed_health_insurance_ald_person', label: 'SE health insurance (allocable)', value: seHealth, negative: true },
+        { name: 'self_employed_pension_contribution_ald_person', label: 'SE retirement contribution (allocable)', value: sePension, negative: true },
+      ],
+    },
+    {
+      title: 'QBID computation',
+      caption: '20% × QBI, capped by 20% of (taxable income − net capital gain)',
+      total: Math.min(qbidAmount, tiCap),
+      totalLabel: 'Final QBID',
+      rows: [
+        { name: 'qbid_amount', label: 'Per-person QBID (after wage/SSTB rules, before TI cap)', value: qbidAmount },
+        { name: 'taxable_income_less_qbid', label: 'Taxable income (before QBID)', value: tiBefore },
+        { name: 'adjusted_net_capital_gain', label: 'Net capital gain + qualified dividends', value: netCapGain },
+        { label: 'TI cap = 20% × max(0, TI − net capital gain)', value: tiCap, computed: true },
+      ],
+    },
+    {
+      title: 'Tax impact',
+      caption: 'How the QBID flows through to the final tax bill',
+      rows: [
+        { name: 'adjusted_gross_income', label: 'Adjusted gross income', value: num(outputs, 'adjusted_gross_income') },
+        { name: 'taxable_income', label: 'Taxable income (after QBID)', value: num(outputs, 'taxable_income') },
+        { name: 'income_tax_before_credits', label: 'Income tax before credits', value: num(outputs, 'income_tax_before_credits') },
+      ],
+    },
+  ];
+}
+
+function BreakdownStaged({ outputs }: { outputs: Outputs }) {
+  const stages = buildStages(outputs);
+  return (
+    <div className="mb-6 space-y-4">
+      <h3 className="text-sm font-semibold text-pe-text-primary">QBI computation breakdown</h3>
+      {stages.map((stage) => (
+        <div key={stage.title} className="bg-white rounded-pe-lg border border-pe-gray-200 overflow-hidden">
+          <div className="px-5 py-3 bg-pe-gray-50 border-b border-pe-gray-200 flex items-baseline justify-between gap-4">
+            <div>
+              <div className="text-sm font-semibold text-pe-text-primary">{stage.title}</div>
+              {stage.caption && (
+                <div className="text-xs text-pe-text-tertiary mt-0.5">{stage.caption}</div>
+              )}
+            </div>
+            {stage.total !== undefined && (
+              <div className="text-right whitespace-nowrap">
+                <div className="text-[10px] uppercase tracking-wider text-pe-text-tertiary">{stage.totalLabel ?? 'Total'}</div>
+                <div className="text-lg font-semibold tabular-nums text-pe-teal-600">{formatCurrency(stage.total)}</div>
+              </div>
+            )}
+          </div>
+          <div className="divide-y divide-pe-gray-100">
+            {stage.rows.map((row, idx) => {
+              const display = row.negative ? -Math.abs(row.value) : row.value;
+              const isZero = row.value === 0;
+              return (
+                <div
+                  key={row.name ?? `computed-${idx}`}
+                  className={`flex items-baseline justify-between gap-4 px-5 py-2.5 ${isZero ? 'opacity-50' : ''}`}
+                  title={row.name}
+                >
+                  <div className="min-w-0">
+                    <span className="text-sm text-pe-text-primary">{row.label}</span>
+                    {row.computed && (
+                      <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded bg-pe-gray-100 text-[10px] uppercase tracking-wider text-pe-text-tertiary">
+                        derived
+                      </span>
+                    )}
+                  </div>
+                  <span className={`text-base font-medium tabular-nums whitespace-nowrap ${display < 0 ? 'text-pe-error' : 'text-pe-text-primary'}`}>
+                    {display < 0 ? `−${formatCurrency(Math.abs(display))}` : formatCurrency(display)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function CalculatorView() {
   const buildDefaults = () => {
     const defaults: Record<string, any> = {
@@ -377,38 +501,8 @@ export default function CalculatorView() {
               </div>
             )}
 
-            {/* QBI Breakdown */}
-            <div className="mb-6">
-              <h3 className="text-sm font-semibold text-pe-text-primary mb-3">QBI computation breakdown</h3>
-              <div className="bg-white rounded-pe-lg border border-pe-gray-200 divide-y divide-pe-gray-100">
-                {OUTPUT_DEFS.filter((o) => !o.primary).map((outputDef) => {
-                  const val = result.outputs[outputDef.name];
-                  const isError = typeof val === 'object' && val !== null;
-                  const numVal = typeof val === 'number' ? val : 0;
-                  const isZero = numVal === 0;
-                  return (
-                    <div
-                      key={outputDef.name}
-                      className={`flex items-center justify-between px-5 py-3 ${isZero ? 'opacity-50' : ''}`}
-                    >
-                      <div>
-                        <div className="text-sm text-pe-text-primary">{outputDef.label}</div>
-                        <div className="text-xs text-pe-text-tertiary font-mono">{outputDef.name}</div>
-                      </div>
-                      <div className="text-right">
-                        {isError ? (
-                          <span className="text-sm text-pe-error">Error</span>
-                        ) : (
-                          <span className={`text-lg font-semibold tabular-nums ${numVal < 0 ? 'text-pe-error' : 'text-pe-text-primary'}`}>
-                            {formatCurrency(numVal)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            {/* QBI Breakdown — staged */}
+            <BreakdownStaged outputs={result.outputs} />
 
             {/* Parameters Used */}
             {result.parameters && Object.keys(result.parameters).length > 0 && (
