@@ -197,7 +197,7 @@ def _build_section_b2_wage_limitation(variables: Dict, parameters: Dict) -> LawS
             section="199A(b)(2)",
             title="Determination of deductible amount for each trade or business",
             url=f"{CORNELL_BASE}#b_2",
-            text="The deductible amount for any taxable year shall be the lesser of— (A) 20 percent of the taxpayer's qualified business income... or (B) the greater of— (i) 50 percent of the W–2 wages... or (ii) the sum of 25 percent of the W–2 wages... plus 2.5 percent of the unadjusted basis immediately after acquisition of all qualified property."
+            text="The amount determined under this paragraph with respect to any qualified trade or business is the lesser of— (A) 20 percent of the taxpayer's qualified business income with respect to the qualified trade or business, or (B) the greater of— (i) 50 percent of the W–2 wages with respect to the qualified trade or business, or (ii) the sum of 25 percent of the W–2 wages with respect to the qualified trade or business, plus 2.5 percent of the unadjusted basis immediately after acquisition of all qualified property."
         ),
         status=ImplementationStatus.COMPLETE,
         inputs=[
@@ -284,7 +284,7 @@ def _build_section_b3_phaseout(variables: Dict, parameters: Dict) -> LawSection:
             section="199A(b)(3)",
             title="Modifications to limitation based on W-2 wages",
             url=f"{CORNELL_BASE}#b_3",
-            text="In the case of any taxpayer whose taxable income for the taxable year exceeds the threshold amount... the deductible amount shall be reduced by the amount which bears the same ratio to the excess of [20% QBI over the wage cap] as such excess taxable income bears to $50,000 ($100,000 in the case of a joint return)."
+            text="(A) Exception from limit: In the case of any taxpayer whose taxable income for the taxable year does not exceed the threshold amount, paragraph (2) shall be applied without regard to subparagraph (B). (B) Phase-in of limit: If the taxable income exceeds the threshold amount but does not exceed the sum of the threshold amount plus $75,000 ($150,000 in the case of a joint return) — figures effective for tax years beginning after Dec 31, 2025; were $50,000 / $100,000 pre-OBBBA — and the wage/UBIA cap (paragraph (2)(B)) is less than 20% of QBI, then paragraph (2) is applied without subparagraph (B), reducing the (2)(A) amount proportionally based on where the taxpayer's income falls in the phase-in range."
         ),
         status=ImplementationStatus.COMPLETE,
         parameters=[
