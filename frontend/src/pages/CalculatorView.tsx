@@ -217,6 +217,163 @@ function buildStages(outputs: Outputs): Stage[] {
   ];
 }
 
+function ConstraintChart({ outputs }: { outputs: Outputs }) {
+  const nonSstb = num(outputs, 'qualified_business_income');
+  const sstb = num(outputs, 'sstb_qualified_business_income');
+  const totalQbi = nonSstb + sstb;
+  const reitPtp = num(outputs, 'qualified_reit_and_ptp_income');
+  const qbidAmount = num(outputs, 'qbid_amount');
+  const tiBefore = num(outputs, 'taxable_income_less_qbid');
+  const netCapGain = num(outputs, 'adjusted_net_capital_gain');
+
+  const unconstrainedQbi = 0.20 * Math.max(0, totalQbi) + 0.20 * Math.max(0, reitPtp);
+  const reitPtpComponent = 0.20 * Math.max(0, reitPtp);
+  const businessComponents = Math.max(0, qbidAmount - reitPtpComponent);
+  const incomeLimit = 0.20 * Math.max(0, tiBefore - netCapGain);
+  const finalQbid = Math.min(qbidAmount, incomeLimit);
+  const reductionFromCaps = Math.max(0, unconstrainedQbi - qbidAmount);
+  const qbiDeductionBinds = qbidAmount <= incomeLimit;
+
+  // Scale the chart so the longest bar (including ghost) is full width.
+  const maxVal = Math.max(unconstrainedQbi, incomeLimit, 1);
+  const pct = (val: number) => `${Math.min(100, (val / maxVal) * 100)}%`;
+
+  if (qbidAmount === 0 && incomeLimit === 0) return null;
+
+  return (
+    <div className="mb-6 bg-white rounded-pe-lg border border-pe-gray-200 p-5">
+      <div className="flex items-baseline justify-between mb-1">
+        <h3 className="text-sm font-semibold text-pe-text-primary">Which constraint binds?</h3>
+        <span className="text-xs text-pe-text-tertiary font-mono">min(QBI deduction, income limit)</span>
+      </div>
+      <p className="text-xs text-pe-text-tertiary mb-5">
+        The shorter bar is the lower ceiling, so it sets the final QBID.
+      </p>
+
+      <div className="space-y-4">
+        {/* QBI deduction bar */}
+        <ConstraintBar
+          label="QBI deduction"
+          formLine="L10"
+          value={qbidAmount}
+          ghost={reductionFromCaps > 0 ? unconstrainedQbi : undefined}
+          ghostLabel={reductionFromCaps > 0 ? `before −$${Math.round(reductionFromCaps).toLocaleString()} wage / SSTB cap` : undefined}
+          binding={qbiDeductionBinds && qbidAmount > 0}
+          pct={pct}
+          segments={[
+            { label: 'Non-SSTB + SSTB components', value: businessComponents, color: 'bg-pe-teal-500' },
+            { label: '20% × REIT/PTP', value: reitPtpComponent, color: 'bg-pe-blue-500' },
+          ]}
+        />
+
+        {/* Income limit bar */}
+        <ConstraintBar
+          label="Income limit"
+          formLine="L14"
+          value={incomeLimit}
+          binding={!qbiDeductionBinds && incomeLimit > 0}
+          pct={pct}
+          segments={[
+            { label: '20% × max(0, TI − net capital gain)', value: incomeLimit, color: 'bg-pe-gray-500' },
+          ]}
+        />
+      </div>
+
+      <div className="mt-5 pt-4 border-t border-pe-gray-100 flex items-baseline justify-between">
+        <div>
+          <div className="text-sm text-pe-text-secondary">Final QBID</div>
+          <div className="text-[11px] text-pe-text-tertiary">
+            {qbiDeductionBinds
+              ? 'QBI deduction is the lower ceiling — wage caps or SSTB phase-out limited the deduction.'
+              : 'Income limit is the lower ceiling — taxable income is the binding constraint.'}
+          </div>
+        </div>
+        <span className="text-2xl font-semibold tabular-nums text-pe-teal-600">{formatCurrency(finalQbid)}</span>
+      </div>
+    </div>
+  );
+}
+
+interface ConstraintBarSegment {
+  label: string;
+  value: number;
+  color: string; // tailwind bg-* class
+}
+
+function ConstraintBar({
+  label,
+  formLine,
+  value,
+  ghost,
+  ghostLabel,
+  binding,
+  pct,
+  segments,
+}: {
+  label: string;
+  formLine: string;
+  value: number;
+  ghost?: number;
+  ghostLabel?: string;
+  binding: boolean;
+  pct: (v: number) => string;
+  segments: ConstraintBarSegment[];
+}) {
+  const positiveSegments = segments.filter((s) => s.value > 0);
+  return (
+    <div>
+      <div className="flex items-baseline justify-between mb-1.5">
+        <div className="flex items-baseline gap-2">
+          <span className="text-sm font-medium text-pe-text-primary">{label}</span>
+          <span className="text-[10px] font-mono text-pe-text-tertiary">{formLine}</span>
+        </div>
+        <div className="flex items-baseline gap-2">
+          <span className={`text-sm font-semibold tabular-nums ${binding ? 'text-pe-teal-600' : 'text-pe-text-primary'}`}>
+            {formatCurrency(value)}
+          </span>
+          {binding && (
+            <span className="text-[10px] uppercase tracking-wider font-semibold text-pe-teal-600">
+              ← binds
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="relative h-7 bg-pe-gray-50 rounded">
+        {ghost !== undefined && ghost > value && (
+          <div
+            className="absolute inset-y-0 left-0 rounded bg-pe-gray-100 border-r-2 border-dashed border-pe-gray-300"
+            style={{ width: pct(ghost) }}
+            title={ghostLabel}
+          />
+        )}
+        <div
+          className={`absolute inset-y-0 left-0 flex rounded overflow-hidden ${binding ? 'ring-2 ring-pe-teal-500' : ''}`}
+          style={{ width: pct(Math.max(value, 0.01)) }}
+        >
+          {positiveSegments.map((s) => (
+            <div
+              key={s.label}
+              className={s.color}
+              style={{ width: `${(s.value / value) * 100}%` }}
+              title={`${s.label}: ${formatCurrency(s.value)}`}
+            />
+          ))}
+        </div>
+      </div>
+      {positiveSegments.length > 1 && (
+        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
+          {positiveSegments.map((s) => (
+            <span key={s.label} className="inline-flex items-center gap-1.5 text-[11px] text-pe-text-tertiary">
+              <span className={`inline-block w-2 h-2 rounded-sm ${s.color}`} />
+              {s.label} {formatCurrency(s.value)}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function BreakdownStaged({ outputs }: { outputs: Outputs }) {
   const stages = buildStages(outputs);
   return (
@@ -532,6 +689,9 @@ export default function CalculatorView() {
                 </div>
               </div>
             )}
+
+            {/* Constraint comparison */}
+            <ConstraintChart outputs={result.outputs} />
 
             {/* QBI Breakdown — staged */}
             <BreakdownStaged outputs={result.outputs} />
