@@ -1,6 +1,6 @@
 """Pydantic models for law-structured QBID visualization."""
 
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Any
 from enum import Enum
 from pydantic import BaseModel, Field
 
@@ -27,9 +27,6 @@ class InputVariable(BaseModel):
     label: str
     description: Optional[str] = None
     unit: Optional[str] = None
-    default_value: Optional[float] = None
-    current_value: Optional[float] = None
-    github_url: Optional[str] = None
 
 
 class Parameter(BaseModel):
@@ -40,7 +37,6 @@ class Parameter(BaseModel):
     unit: Optional[str] = None
     year: int = 2025
     filing_status: Optional[str] = None
-    github_url: Optional[str] = None
 
 
 class ComputationStep(BaseModel):
@@ -52,51 +48,22 @@ class ComputationStep(BaseModel):
     inputs: List[str] = Field(default_factory=list)
     output: Optional[str] = None
     code_reference: Optional[str] = None
-    github_url: Optional[str] = None
-
-
-class DecisionPoint(BaseModel):
-    """A decision/branching point in the computation."""
-    id: str
-    condition: str
-    condition_formula: Optional[str] = None
-    true_branch: str
-    false_branch: str
-    threshold_values: Optional[Dict[str, float]] = None
 
 
 class LawSection(BaseModel):
     """A section of the law with its implementation."""
-    id: str = Field(..., description="Unique identifier")
-    section_number: str = Field(..., description="Legal section (e.g., '199A(a)')")
-    title: str = Field(..., description="Section title")
-    description: str = Field(..., description="Plain English description")
-
-    # Legal reference
+    id: str
+    section_number: str
+    title: str
+    description: str
     legal_reference: LegalReference
-
-    # Implementation status
     status: ImplementationStatus
     status_notes: Optional[str] = None
-
-    # Computation details
     inputs: List[InputVariable] = Field(default_factory=list)
     parameters: List[Parameter] = Field(default_factory=list)
     steps: List[ComputationStep] = Field(default_factory=list)
-    decisions: List[DecisionPoint] = Field(default_factory=list)
-
-    # Code mapping
     variables_used: List[str] = Field(default_factory=list)
-    formula_source: Optional[str] = None
     github_url: Optional[str] = None
-
-    # Flow
-    next_sections: List[str] = Field(default_factory=list)
-    depends_on: List[str] = Field(default_factory=list)
-
-    # Whether this is an adjacent/supporting section vs core 199A
-    is_adjacent: bool = Field(default=False, description="True if this is an adjacent IRC section")
-    parent_section: Optional[str] = Field(None, description="Which 199A section this supports")
 
 
 class AdjacentSection(BaseModel):
@@ -112,7 +79,7 @@ class AdjacentSection(BaseModel):
     key_provisions: List[str] = Field(default_factory=list)
     variables_used: List[str] = Field(default_factory=list)
     github_url: Optional[str] = None
-    referenced_by: List[str] = Field(default_factory=list, description="Which 199A sections reference this")
+    referenced_by: List[str] = Field(default_factory=list)
 
 
 class QBIDLawStructure(BaseModel):
@@ -122,27 +89,11 @@ class QBIDLawStructure(BaseModel):
     effective_date: str = "2018-01-01"
     sunset_date: Optional[str] = None
 
-    # Summary statistics
     total_sections: int
     implemented_sections: int
     partial_sections: int
     missing_sections: int
 
-    # The main content
     sections: List[LawSection]
-
-    # Adjacent IRC sections
-    adjacent_sections: List[AdjacentSection] = Field(
-        default_factory=list,
-        description="Related IRC sections that interact with 199A"
-    )
-
-    # Overall flow order
-    computation_order: List[str] = Field(
-        default_factory=list,
-        description="Ordered list of section IDs for computation flow"
-    )
-
-    # Metadata
+    adjacent_sections: List[AdjacentSection] = Field(default_factory=list)
     policyengine_commit: Optional[str] = None
-    last_updated: Optional[str] = None
