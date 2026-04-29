@@ -69,7 +69,7 @@ def _build_section_a_allowance(variables: Dict, parameters: Dict) -> LawSection:
             section="199A(a)",
             title="Allowance of deduction",
             url=f"{CORNELL_BASE}#a",
-            text="In the case of a taxpayer other than a corporation, there shall be allowed as a deduction... an amount equal to the lesser of— (A) the combined qualified business income amount, or (B) an amount equal to 20 percent of the excess (if any) of— (i) the taxable income of the taxpayer for the taxable year, over (ii) the net capital gain..."
+            text="In the case of a taxpayer other than a corporation, except as provided in subsection (i), there shall be allowed as a deduction for any taxable year an amount equal to the lesser of— (A) the combined qualified business income amount of the taxpayer, or (B) an amount equal to 20 percent of the excess (if any) of— (i) the taxable income of the taxpayer for the taxable year, over (ii) the net capital gain..."
         ),
         status=ImplementationStatus.COMPLETE,
         inputs=[
@@ -101,19 +101,19 @@ def _build_section_a_allowance(variables: Dict, parameters: Dict) -> LawSection:
         steps=[
             ComputationStep(
                 id="step_a1",
-                description="Calculate taxable income cap",
-                formula="taxable_income_cap = 20% × (taxable_income - capital_gains)",
-                formula_latex=r"\text{Cap} = 0.20 \times (\text{Taxable Income} - \text{Net Capital Gains})",
+                description="Calculate taxable income cap (excluding capital gains)",
+                formula="taxable_income_cap = 20% × MAX(0, taxable_income − net_capital_gain)",
+                formula_latex=r"\text{Cap} = 0.20 \times \max(0, \text{Taxable Income} - \text{Net Capital Gain})",
                 inputs=["taxable_income_less_qbid", "adjusted_net_capital_gain"],
                 output="taxable_income_cap"
             ),
             ComputationStep(
                 id="step_a2",
-                description="Apply the taxable income cap",
-                formula="final_qbid = MIN(combined_qbid, taxable_income_cap)",
-                formula_latex=r"\text{QBID} = \min(\text{Combined QBID}, \text{Cap})",
+                description="Apply the taxable income cap (the §199A(i) floor for 2026+ is applied separately afterward)",
+                formula="pre_floor_qbid = MIN(combined_qbid, taxable_income_cap)",
+                formula_latex=r"\text{Pre-floor QBID} = \min(\text{Combined QBID}, \text{Cap})",
                 inputs=["combined_qbid", "taxable_income_cap"],
-                output="qualified_business_income_deduction"
+                output="pre_floor_qbid"
             ),
         ],
         variables_used=["qualified_business_income_deduction", "taxable_income_less_qbid", "adjusted_net_capital_gain"],
@@ -315,24 +315,24 @@ def _build_section_b3_phaseout(variables: Dict, parameters: Dict) -> LawSection:
         steps=[
             ComputationStep(
                 id="step_b3_1",
-                description="Calculate reduction rate based on income in phase-out range",
-                formula="reduction_rate = MIN(1, (taxable_income - threshold) / phase_out_length)",
-                formula_latex=r"\text{Reduction Rate} = \min\left(1, \frac{\text{Income} - \text{Threshold}}{\text{Phase-out Length}}\right)",
+                description="Calculate reduction rate based on income in phase-out range (Worksheet 12-A line 24; Schedule A line 9)",
+                formula="reduction_rate = MIN(1, MAX(0, taxable_income - threshold) / phase_out_length)",
+                formula_latex=r"\text{Reduction Rate} = \min\left(1, \frac{\max(0, \text{Income} - \text{Threshold})}{\text{Phase-out Length}}\right)",
                 inputs=["taxable_income_less_qbid", "threshold", "phase_out_length"],
                 output="reduction_rate"
             ),
             ComputationStep(
                 id="step_b3_2",
-                description="Calculate reduction amount",
-                formula="reduction = reduction_rate × MAX(0, 20% × QBI - wage_cap)",
+                description="Calculate reduction amount = reduction_rate × MAX(0, 20% × QBI − wage/UBIA cap)",
+                formula="reduction = reduction_rate × MAX(0, qbid_max − full_cap)",
                 inputs=["reduction_rate", "qbid_max", "full_cap"],
                 output="reduction"
             ),
             ComputationStep(
                 id="step_b3_3",
-                description="Apply reduction to get phased QBID",
-                formula="phased_qbid = 20% × QBI - reduction",
-                inputs=["qbid_max", "reduction"],
+                description="Phased QBID is the larger of the capped amount or the reduced amount",
+                formula="phased_qbid = MAX(MIN(qbid_max, full_cap), qbid_max − reduction)",
+                inputs=["qbid_max", "full_cap", "reduction"],
                 output="phased_qbid"
             ),
         ],
@@ -466,14 +466,14 @@ def _build_section_c3_exclusions(variables: Dict, parameters: Dict) -> LawSectio
     """§199A(c)(3)(B) - Items not included in QBI."""
     return LawSection(
         id="sec_c3_exclusions",
-        section_number="199A(c)(3)(B)",
+        section_number="199A(c)(3)(B), (c)(4)",
         title="Items Excluded from QBI",
-        description="Certain items are explicitly excluded from QBI: capital gains/losses, dividends, interest (unless business-allocable), reasonable compensation, and guaranteed payments.",
+        description="Certain items are excluded from QBI. §199A(c)(3)(B) excludes investment-type income (capital gains/losses, dividends, interest, foreign currency gains/losses, certain commodities transactions, annuity income). §199A(c)(4) separately excludes reasonable compensation paid to the taxpayer and guaranteed payments to partners.",
         legal_reference=LegalReference(
-            section="199A(c)(3)(B)",
-            title="Items not included",
+            section="199A(c)(3)(B), (c)(4)",
+            title="Items not included; reasonable compensation and guaranteed payments",
             url=f"{CORNELL_BASE}#c_3_B",
-            text="The following items shall not be taken into account as a qualified item of income, gain, deduction, or loss: (i) short-term or long-term capital gain or loss, (ii) dividend income, (iii) interest income, (iv) foreign currency gains or losses... (vi) any item of deduction or loss properly allocable to such amounts, (vii) reasonable compensation paid for services rendered, (viii) guaranteed payments for services..."
+            text="(c)(3)(B): The following items shall not be taken into account as a qualified item of income, gain, deduction, or loss: (i) short- or long-term capital gain or loss, (ii) dividend income, (iii) interest income (other than properly allocable to a trade or business), (iv) foreign currency gains/losses, (v) certain net gains from notional principal contracts and commodities, (vi) annuity income (other than business-related), and (vii) any item of deduction or loss properly allocable to such amounts. (c)(4): Qualified business income shall not include— (A) reasonable compensation paid to the taxpayer by any qualified trade or business of the taxpayer for services rendered, (B) any guaranteed payment described in section 707(c) for services rendered, or (C) to the extent provided in regulations, any payment described in section 707(a) to a partner for services rendered."
         ),
         status=ImplementationStatus.PARTIAL,
         status_notes="The model assumes inputs are already properly adjusted. No explicit validation of exclusions.",
@@ -541,7 +541,7 @@ def _build_section_d2_sstb(variables: Dict, parameters: Dict) -> LawSection:
             section="199A(d)(2), (d)(3)",
             title="Specified service trade or business; applicable percentage",
             url=f"{CORNELL_BASE}#d_2",
-            text="The term 'specified service trade or business' means any trade or business... which involves the performance of services in the fields of health, law, accounting, actuarial science, performing arts, consulting, athletics, financial services, brokerage services... §199A(d)(3) provides that for taxpayers above the threshold, the deduction is reduced by the 'applicable percentage' equal to 1 minus the phase-in fraction."
+            text="The term 'specified service trade or business' means any trade or business— (A) which is described in section 1202(e)(3)(A) (applied without regard to the words 'engineering, architecture'), or (B) which involves the performance of services that consist of investing and investment management, trading, or dealing in securities... §199A(d)(3) provides that for taxpayers in the phase-in range, the SSTB deduction is reduced by an 'applicable percentage' equal to 1 minus the phase-in fraction; above the range, no SSTB deduction is allowed."
         ),
         status=ImplementationStatus.COMPLETE,
         inputs=[
@@ -635,7 +635,7 @@ def _build_section_i_minimum_deduction(variables: Dict, parameters: Dict) -> Law
             section="199A(i)",
             title="Minimum deduction",
             url=f"{CORNELL_BASE}#i",
-            text="In the case of an applicable taxpayer... the deduction shall be not less than $400... An applicable taxpayer is one with qualified business income of $1,000 or more."
+            text="In the case of an applicable taxpayer for any taxable year, the deduction allowed under subsection (a) for the taxable year shall be equal to the greater of— (A) the amount otherwise determined under subsection (a), or (B) $400. An 'applicable taxpayer' is one with at least $1,000 of aggregate qualified business income from qualified trades or businesses in which the taxpayer materially participates."
         ),
         status=ImplementationStatus.COMPLETE,
         status_notes="Effective starting 2026 per One Big Beautiful Bill Act",
@@ -657,17 +657,17 @@ def _build_section_i_minimum_deduction(variables: Dict, parameters: Dict) -> Law
         steps=[
             ComputationStep(
                 id="step_i1",
-                description="Check if QBI meets minimum threshold",
-                formula="if qualified_business_income >= 1000",
-                inputs=["qualified_business_income"],
-                output="eligible_for_floor"
+                description="Determine the floor amount based on aggregate QBI (per single_amount bracket)",
+                formula="floor = 400 if (non_sstb_qbi + sstb_qbi) ≥ 1,000 else 0",
+                inputs=["qualified_business_income", "sstb_qualified_business_income"],
+                output="floor"
             ),
             ComputationStep(
                 id="step_i2",
-                description="Apply floor if eligible",
-                formula="final_qbid = MAX(calculated_qbid, 400)",
-                inputs=["calculated_qbid", "floor_amount"],
-                output="final_qbid"
+                description="Take the greater of the pre-floor QBID and the floor",
+                formula="final_qbid = MAX(pre_floor_qbid, floor)",
+                inputs=["pre_floor_qbid", "floor"],
+                output="qualified_business_income_deduction"
             ),
         ],
         variables_used=["qualified_business_income_deduction"],
@@ -686,7 +686,7 @@ def _build_section_g_cooperatives(variables: Dict, parameters: Dict) -> LawSecti
             section="199A(g)",
             title="Deduction for income attributable to domestic production activities of specified agricultural or horticultural cooperatives",
             url=f"{CORNELL_BASE}#g",
-            text="In the case of any taxable year of a specified agricultural or horticultural cooperative... there shall be allowed as a deduction an amount equal to 9 percent of the lesser of— (A) the qualified production activities income of the cooperative for the taxable year..."
+            text="In the case of a taxpayer which is a specified agricultural or horticultural cooperative, there shall be allowed as a deduction an amount equal to 9 percent of the lesser of— (A) the qualified production activities income of the taxpayer for the taxable year, or (B) the taxable income of the taxpayer for the taxable year (determined without regard to this section)..."
         ),
         status=ImplementationStatus.MISSING,
         status_notes="Cooperative provisions are NOT implemented in PolicyEngine",
