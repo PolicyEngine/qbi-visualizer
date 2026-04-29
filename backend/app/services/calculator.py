@@ -201,6 +201,11 @@ QBI_OUTPUTS = [
         "entity": "person",
     },
     {
+        "name": "qualified_reit_and_ptp_income",
+        "label": "Qualified REIT dividends and PTP income",
+        "entity": "person",
+    },
+    {
         "name": "qbid_amount",
         "label": "Per-Person QBID Amount (before TI cap)",
         "entity": "person",

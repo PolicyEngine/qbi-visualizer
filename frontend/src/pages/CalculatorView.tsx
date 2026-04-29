@@ -48,6 +48,7 @@ const OUTPUT_DEFS: OutputDef[] = [
   { name: 'qualified_business_income_deduction', label: 'Qualified Business Income Deduction', entity: 'tax_unit', primary: true },
   { name: 'qualified_business_income', label: 'Non-SSTB qualified business income', entity: 'person' },
   { name: 'sstb_qualified_business_income', label: 'SSTB qualified business income', entity: 'person' },
+  { name: 'qualified_reit_and_ptp_income', label: 'Qualified REIT dividends and PTP income', entity: 'person' },
   { name: 'qbid_amount', label: 'Per-person QBID (before TI cap)', entity: 'person' },
   { name: 'taxable_income_less_qbid', label: 'Taxable income (before QBID)', entity: 'tax_unit' },
   { name: 'adjusted_net_capital_gain', label: 'Adjusted net capital gain', entity: 'tax_unit' },
@@ -118,16 +119,170 @@ interface CalcResult {
   filing_status: string;
 }
 
+type Outputs = CalcResult['outputs'];
+
+const num = (outputs: Outputs, name: string): number => {
+  const v = outputs[name];
+  return typeof v === 'number' ? v : 0;
+};
+
+interface StageRow {
+  name?: string; // PolicyEngine variable name (omitted for computed rows)
+  label: string;
+  formLine?: string; // e.g. "Form 8995 L10"
+  value: number;
+  negative?: boolean; // Display with leading minus
+  emphasis?: boolean; // Render as a final/result row
+}
+
+interface Stage {
+  title: string;
+  caption?: string;
+  total?: number;
+  totalLabel?: string;
+  rows: StageRow[];
+}
+
+function buildStages(outputs: Outputs): Stage[] {
+  const nonSstb = num(outputs, 'qualified_business_income');
+  const sstb = num(outputs, 'sstb_qualified_business_income');
+  const totalQbi = nonSstb + sstb;
+  const reitPtp = num(outputs, 'qualified_reit_and_ptp_income');
+  const seTax = num(outputs, 'self_employment_tax_ald_person');
+  const seHealth = num(outputs, 'self_employed_health_insurance_ald_person');
+  const sePension = num(outputs, 'self_employed_pension_contribution_ald_person');
+  const qbidAmount = num(outputs, 'qbid_amount');
+  const tiBefore = num(outputs, 'taxable_income_less_qbid');
+  const netCapGain = num(outputs, 'adjusted_net_capital_gain');
+
+  // Form 8995 derived values
+  const qbiComponentMax = 0.20 * Math.max(0, totalQbi); // L5 if no caps
+  const reitPtpComponent = 0.20 * Math.max(0, reitPtp); // L9
+  const tiLessCapGain = Math.max(0, tiBefore - netCapGain); // L13
+  const incomeLimit = 0.20 * tiLessCapGain; // L14
+  const finalQbid = Math.min(qbidAmount, incomeLimit); // L15
+
+  // Detect whether wage caps or SSTB phase-out reduced qbid_amount below
+  // 20% × Total QBI (plus the REIT/PTP component, which has no cap).
+  const unconstrainedQbi = qbiComponentMax + reitPtpComponent;
+  const reductionFromCaps = Math.max(0, unconstrainedQbi - qbidAmount);
+
+  return [
+    {
+      title: 'Qualified business income',
+      caption: 'Per-person QBI components after SE-tax / health / retirement allocations',
+      total: totalQbi,
+      totalLabel: 'Total QBI (L4)',
+      rows: [
+        { name: 'qualified_business_income', label: 'Non-SSTB QBI', formLine: 'Form 8995 L2 (non-SSTB)', value: nonSstb },
+        { name: 'sstb_qualified_business_income', label: 'SSTB QBI', formLine: 'Form 8995-A Part I (SSTB)', value: sstb },
+        { name: 'self_employment_tax_ald_person', label: 'SE tax deduction (allocable)', value: seTax, negative: true },
+        { name: 'self_employed_health_insurance_ald_person', label: 'SE health insurance (allocable)', value: seHealth, negative: true },
+        { name: 'self_employed_pension_contribution_ald_person', label: 'SE retirement contribution (allocable)', value: sePension, negative: true },
+      ],
+    },
+    {
+      title: 'QBI components (Form 8995 L5 + L9)',
+      caption: '20% applied to Total QBI and to REIT/PTP income; per-business wage/UBIA caps and SSTB phase-out reduce the QBI side above the threshold (Form 8995-A Part II/III)',
+      rows: [
+        { label: '20% × Total QBI (no limits)', formLine: 'Form 8995 L5', value: qbiComponentMax },
+        ...(reductionFromCaps > 0
+          ? [{ label: '− Wage/UBIA cap and SSTB phase-out (§199A(b)(2), (d)(3))', value: reductionFromCaps, negative: true } as StageRow]
+          : []),
+        { name: 'qualified_reit_and_ptp_income', label: 'Qualified REIT/PTP income', formLine: 'Form 8995 L6', value: reitPtp },
+        { label: '20% × REIT/PTP = REIT/PTP component', formLine: 'Form 8995 L9', value: reitPtpComponent },
+        { name: 'qbid_amount', label: 'QBI deduction before income limit', formLine: 'Form 8995 L10', value: qbidAmount, emphasis: true },
+      ],
+    },
+    {
+      title: 'Income limit and final QBID',
+      caption: 'Form 8995 Lines 11–15 / Form 8995-A Part IV',
+      rows: [
+        { name: 'taxable_income_less_qbid', label: 'Taxable income (before QBID)', formLine: 'Form 8995 L11', value: tiBefore },
+        { name: 'adjusted_net_capital_gain', label: 'Net capital gain + qualified dividends', formLine: 'Form 8995 L12', value: netCapGain },
+        { label: 'TI − net capital gain', formLine: 'Form 8995 L13', value: tiLessCapGain },
+        { label: '20% × (TI − net capital gain) = income limit', formLine: 'Form 8995 L14', value: incomeLimit },
+        { label: 'Final QBID = min(QBI deduction, income limit)', formLine: 'Form 8995 L15', value: finalQbid, emphasis: true },
+      ],
+    },
+    {
+      title: 'Tax impact',
+      caption: 'How the QBID flows through to the final tax bill',
+      rows: [
+        { name: 'adjusted_gross_income', label: 'Adjusted gross income', value: num(outputs, 'adjusted_gross_income') },
+        { name: 'taxable_income', label: 'Taxable income (after QBID)', value: num(outputs, 'taxable_income') },
+        { name: 'income_tax_before_credits', label: 'Income tax before credits', value: num(outputs, 'income_tax_before_credits') },
+      ],
+    },
+  ];
+}
+
+function BreakdownStaged({ outputs }: { outputs: Outputs }) {
+  const stages = buildStages(outputs);
+  return (
+    <div className="mb-6 space-y-4">
+      <h3 className="text-sm font-semibold text-pe-text-primary">QBI computation breakdown</h3>
+      {stages.map((stage) => (
+        <div key={stage.title} className="bg-white rounded-pe-lg border border-pe-gray-200 overflow-hidden">
+          <div className="px-5 py-3 bg-pe-gray-50 border-b border-pe-gray-200 flex items-baseline justify-between gap-4">
+            <div>
+              <div className="text-sm font-semibold text-pe-text-primary">{stage.title}</div>
+              {stage.caption && (
+                <div className="text-xs text-pe-text-tertiary mt-0.5">{stage.caption}</div>
+              )}
+            </div>
+            {stage.total !== undefined && (
+              <div className="text-right whitespace-nowrap">
+                <div className="text-[10px] uppercase tracking-wider text-pe-text-tertiary">{stage.totalLabel ?? 'Total'}</div>
+                <div className="text-lg font-semibold tabular-nums text-pe-teal-600">{formatCurrency(stage.total)}</div>
+              </div>
+            )}
+          </div>
+          <div className="divide-y divide-pe-gray-100">
+            {stage.rows.map((row, idx) => {
+              const display = row.negative ? -Math.abs(row.value) : row.value;
+              const isZero = row.value === 0;
+              const dim = isZero && !row.emphasis;
+              return (
+                <div
+                  key={row.name ?? `computed-${idx}`}
+                  className={`flex items-baseline justify-between gap-4 px-5 py-2.5 ${dim ? 'opacity-50' : ''} ${row.emphasis ? 'bg-pe-teal-50/40' : ''}`}
+                  title={row.name}
+                >
+                  <div className="min-w-0">
+                    <span className={`text-sm ${row.emphasis ? 'font-semibold' : ''} text-pe-text-primary`}>{row.label}</span>
+                    {row.formLine && (
+                      <span className="ml-2 text-[10px] text-pe-text-tertiary font-mono">{row.formLine}</span>
+                    )}
+                  </div>
+                  <span className={`tabular-nums whitespace-nowrap ${row.emphasis ? 'text-lg font-semibold text-pe-teal-600' : 'text-base font-medium'} ${!row.emphasis && display < 0 ? 'text-pe-error' : ''} ${!row.emphasis && display >= 0 ? 'text-pe-text-primary' : ''}`}>
+                    {display < 0 ? `−${formatCurrency(Math.abs(display))}` : formatCurrency(display)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function CalculatorView() {
   const buildDefaults = () => {
     const defaults: Record<string, any> = {
-      year: 2024,
+      year: 2025,
       filing_status: 'SINGLE',
       state_code: 'TX',
     };
     for (const def of INPUT_DEFS) {
       defaults[def.name] = def.default;
     }
+    // Realistic seed: a single filer with $100k of non-SSTB self-employment
+    // income, below the 2025 threshold ($197,300), so no wage/UBIA cap and
+    // no SSTB phase-out — yields ~$18.6k QBID, capped only by taxable income.
+    defaults.self_employment_income = 100_000;
+    defaults.w2_wages_from_qualified_business = 1_000_000;
     return defaults;
   };
 
@@ -136,6 +291,7 @@ export default function CalculatorView() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openSections, setOpenSections] = useState<Set<string>>(new Set(['QBI Income Sources']));
+  const [parametersOpen, setParametersOpen] = useState(false);
 
   const toggleSection = (name: string) => {
     setOpenSections((prev) => {
@@ -377,48 +533,29 @@ export default function CalculatorView() {
               </div>
             )}
 
-            {/* QBI Breakdown */}
-            <div className="mb-6">
-              <h3 className="text-sm font-semibold text-pe-text-primary mb-3">QBI computation breakdown</h3>
-              <div className="bg-white rounded-pe-lg border border-pe-gray-200 divide-y divide-pe-gray-100">
-                {OUTPUT_DEFS.filter((o) => !o.primary).map((outputDef) => {
-                  const val = result.outputs[outputDef.name];
-                  const isError = typeof val === 'object' && val !== null;
-                  const numVal = typeof val === 'number' ? val : 0;
-                  const isZero = numVal === 0;
-                  return (
-                    <div
-                      key={outputDef.name}
-                      className={`flex items-center justify-between px-5 py-3 ${isZero ? 'opacity-50' : ''}`}
-                    >
-                      <div>
-                        <div className="text-sm text-pe-text-primary">{outputDef.label}</div>
-                        <div className="text-xs text-pe-text-tertiary font-mono">{outputDef.name}</div>
-                      </div>
-                      <div className="text-right">
-                        {isError ? (
-                          <span className="text-sm text-pe-error">Error</span>
-                        ) : (
-                          <span className={`text-lg font-semibold tabular-nums ${numVal < 0 ? 'text-pe-error' : 'text-pe-text-primary'}`}>
-                            {formatCurrency(numVal)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            {/* QBI Breakdown — staged */}
+            <BreakdownStaged outputs={result.outputs} />
 
-            {/* Parameters Used */}
+            {/* Parameters Used — collapsible */}
             {result.parameters && Object.keys(result.parameters).length > 0 && (
-              <div className="mb-6">
-                <h3 className="text-sm font-semibold text-pe-text-primary mb-3">
-                  Model parameters ({result.year})
-                </h3>
-                <div className="bg-white rounded-pe-lg border border-pe-gray-200 overflow-hidden">
+              <div className="mb-6 bg-white rounded-pe-lg border border-pe-gray-200 overflow-hidden">
+                <button
+                  onClick={() => setParametersOpen((v) => !v)}
+                  className="w-full flex items-center justify-between px-5 py-3 bg-pe-gray-50 hover:bg-pe-gray-100 transition-colors text-left"
+                >
+                  <div className="flex items-center gap-2">
+                    <Chevron open={parametersOpen} />
+                    <span className="text-sm font-semibold text-pe-text-primary">
+                      Model parameters ({result.year})
+                    </span>
+                    <span className="text-xs text-pe-text-tertiary">
+                      ({Object.keys(result.parameters).length})
+                    </span>
+                  </div>
+                </button>
+                {parametersOpen && (
                   <table className="w-full text-sm">
-                    <tbody className="divide-y divide-pe-gray-100">
+                    <tbody className="divide-y divide-pe-gray-100 border-t border-pe-gray-100">
                       {Object.entries(result.parameters).map(([key, val]) => {
                         const isRate = key.includes('rate');
                         const label = key
@@ -435,20 +572,9 @@ export default function CalculatorView() {
                       })}
                     </tbody>
                   </table>
-                </div>
+                )}
               </div>
             )}
-
-            {/* How it works */}
-            <div className="bg-pe-teal-50 rounded-pe-lg border border-pe-teal-200 p-5">
-              <h3 className="text-sm font-semibold text-pe-teal-800 mb-2">How this works</h3>
-              <p className="text-sm text-pe-teal-700 leading-relaxed">
-                This calculator runs a full PolicyEngine US simulation.
-                The QBID is computed following IRC &sect;199A: 20% of QBI, subject to
-                W-2 wage and property limitations, SSTB phase-out, and capped at
-                20% of taxable income less net capital gains.
-              </p>
-            </div>
           </div>
         ) : (
           <div className="h-full flex items-center justify-center">
