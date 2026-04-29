@@ -526,6 +526,18 @@ def build_form_mapping_response() -> FormMappingResponse:
             "description": "$400 minimum deduction for taxpayers with at least $1,000 of QBI, effective for tax years beginning after Dec 31, 2025 (added by the One Big Beautiful Bill Act)"
         },
         {
+            "id": "sstb_separate_bucket",
+            "title": "Separate SSTB and Non-SSTB QBI Buckets",
+            "form_lines": "Form 8995-A Schedule A vs Part II",
+            "description": "PolicyEngine tracks SSTB and non-SSTB QBI separately so the §199A(d)(3) applicable-percentage phase-out reduces only the SSTB component. Each bucket runs through its own wage/UBIA cap and applicable rate."
+        },
+        {
+            "id": "deduction_proration",
+            "title": "Proportional QBI Deduction Allocation",
+            "form_lines": "Pre-§199A QBI computation",
+            "description": "Allocable items (SE tax, SE health insurance, SE retirement contributions) are pro-rated across positive non-SSTB and SSTB gross income so mixed-sign categories don't generate negative shares."
+        },
+        {
             "id": "phaseout_range",
             "title": "Phase-Out Range",
             "form_lines": "Instructions",
