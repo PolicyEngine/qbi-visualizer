@@ -1,12 +1,10 @@
 import { useState } from 'react'
 import CalculatorView from './pages/CalculatorView'
 import LawView from './pages/LawView'
-import GraphView from './pages/GraphView'
-import TaxsimView from './pages/TaxsimView'
 import TaxFormView from './pages/TaxFormView'
 import './App.css'
 
-type MainView = 'calculator' | 'law' | 'graph' | 'taxsim' | 'forms'
+type MainView = 'calculator' | 'law' | 'forms'
 
 function App() {
   const [mainView, setMainView] = useState<MainView>('calculator')
@@ -14,8 +12,6 @@ function App() {
   const tabs: { id: MainView; label: string }[] = [
     { id: 'calculator', label: 'QBID calculator' },
     { id: 'law', label: 'Law structure' },
-    { id: 'graph', label: 'Code graph' },
-    { id: 'taxsim', label: 'TAXSIM comparison' },
     { id: 'forms', label: 'Tax forms' },
   ]
 
@@ -59,8 +55,6 @@ function App() {
       <main className="flex-1 overflow-hidden">
         {mainView === 'calculator' && <CalculatorView />}
         {mainView === 'law' && <LawView />}
-        {mainView === 'graph' && <GraphView />}
-        {mainView === 'taxsim' && <TaxsimView />}
         {mainView === 'forms' && <TaxFormView />}
       </main>
     </div>

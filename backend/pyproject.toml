@@ -17,9 +17,7 @@ dependencies = [
     "pydantic-settings>=2.0.0",
     "python-dotenv>=1.0.0",
     "gitpython>=3.1.40",
-    "pyyaml>=6.0.1",
     "requests>=2.31.0",
-    "python-multipart>=0.0.6",
     "policyengine-us>=1.653.3",
 ]
 
