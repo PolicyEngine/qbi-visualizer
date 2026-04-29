@@ -260,6 +260,7 @@ export default function CalculatorView() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openSections, setOpenSections] = useState<Set<string>>(new Set(['QBI Income Sources']));
+  const [parametersOpen, setParametersOpen] = useState(false);
 
   const toggleSection = (name: string) => {
     setOpenSections((prev) => {
@@ -504,15 +505,26 @@ export default function CalculatorView() {
             {/* QBI Breakdown — staged */}
             <BreakdownStaged outputs={result.outputs} />
 
-            {/* Parameters Used */}
+            {/* Parameters Used — collapsible */}
             {result.parameters && Object.keys(result.parameters).length > 0 && (
-              <div className="mb-6">
-                <h3 className="text-sm font-semibold text-pe-text-primary mb-3">
-                  Model parameters ({result.year})
-                </h3>
-                <div className="bg-white rounded-pe-lg border border-pe-gray-200 overflow-hidden">
+              <div className="mb-6 bg-white rounded-pe-lg border border-pe-gray-200 overflow-hidden">
+                <button
+                  onClick={() => setParametersOpen((v) => !v)}
+                  className="w-full flex items-center justify-between px-5 py-3 bg-pe-gray-50 hover:bg-pe-gray-100 transition-colors text-left"
+                >
+                  <div className="flex items-center gap-2">
+                    <Chevron open={parametersOpen} />
+                    <span className="text-sm font-semibold text-pe-text-primary">
+                      Model parameters ({result.year})
+                    </span>
+                    <span className="text-xs text-pe-text-tertiary">
+                      ({Object.keys(result.parameters).length})
+                    </span>
+                  </div>
+                </button>
+                {parametersOpen && (
                   <table className="w-full text-sm">
-                    <tbody className="divide-y divide-pe-gray-100">
+                    <tbody className="divide-y divide-pe-gray-100 border-t border-pe-gray-100">
                       {Object.entries(result.parameters).map(([key, val]) => {
                         const isRate = key.includes('rate');
                         const label = key
@@ -529,20 +541,9 @@ export default function CalculatorView() {
                       })}
                     </tbody>
                   </table>
-                </div>
+                )}
               </div>
             )}
-
-            {/* How it works */}
-            <div className="bg-pe-teal-50 rounded-pe-lg border border-pe-teal-200 p-5">
-              <h3 className="text-sm font-semibold text-pe-teal-800 mb-2">How this works</h3>
-              <p className="text-sm text-pe-teal-700 leading-relaxed">
-                This calculator runs a full PolicyEngine US simulation.
-                The QBID is computed following IRC &sect;199A: 20% of QBI, subject to
-                W-2 wage and property limitations, SSTB phase-out, and capped at
-                20% of taxable income less net capital gains.
-              </p>
-            </div>
           </div>
         ) : (
           <div className="h-full flex items-center justify-center">
