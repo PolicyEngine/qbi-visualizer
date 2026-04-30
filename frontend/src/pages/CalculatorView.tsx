@@ -319,8 +319,10 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
   const showWageCap = wageCapInputs.length > 0;
 
   // Vertical space the feeder area needs (max stack height across columns).
-  const FEEDER_BH = 36;
-  const FEEDER_GAP = 6;
+  // Box height needs to clear both the label (y=18 baseline) and the value
+  // (y=36 baseline) — at 36 the value glyphs were spilling past the bottom.
+  const FEEDER_BH = 46;
+  const FEEDER_GAP = 8;
   const maxFeederStack = Math.max(
     nonSstbFeeders.length,
     sstbFeeders.length,
