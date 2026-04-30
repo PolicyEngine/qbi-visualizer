@@ -250,10 +250,12 @@ function BoxLineDiagram({
   outputs,
   inputs,
   parameters,
+  stale,
 }: {
   outputs: Outputs;
   inputs: Record<string, any>;
   parameters?: Record<string, number>;
+  stale?: boolean;
 }) {
   const nonSstb = num(outputs, 'qualified_business_income');
   const sstb = num(outputs, 'sstb_qualified_business_income');
@@ -330,9 +332,13 @@ function BoxLineDiagram({
   ]
     .map((f) => ({ ...f, value: inputVal(f.name) }))
     .filter((f) => f.alwaysShow || f.value > 0);
-  const w2 = inputVal('w2_wages_from_qualified_business');
-  const ubiaVal = inputVal('unadjusted_basis_qualified_property');
-  const wageCap = Math.max(0.50 * w2, 0.25 * w2 + 0.025 * ubiaVal);
+  // Wage cap is a COMPUTED value, not a raw input — so when the result
+  // is stale (user edited inputs after a calc), zero it out alongside
+  // the other computed boxes. The W-2 / UBIA feeder boxes still show
+  // current input values because they're inputs.
+  const w2 = stale ? 0 : inputVal('w2_wages_from_qualified_business');
+  const ubiaVal = stale ? 0 : inputVal('unadjusted_basis_qualified_property');
+  const wageCap = stale ? 0 : Math.max(0.50 * w2, 0.25 * w2 + 0.025 * ubiaVal);
   const showWageCap = true; // always show the wage / UBIA cap path
 
   // §199A(b)(3)(B) phase-in: between threshold and threshold + length the
@@ -1113,7 +1119,7 @@ export default function CalculatorView() {
                 {resultTab === 'breakdown' ? (
                   <BreakdownStaged outputs={displayOutputs} />
                 ) : (
-                  <BoxLineDiagram outputs={displayOutputs} inputs={inputs} parameters={result?.parameters} />
+                  <BoxLineDiagram outputs={displayOutputs} inputs={inputs} parameters={result?.parameters} stale={isStale} />
                 )}
 
                 {/* Parameters Used — collapsible (hidden when stale) */}
