@@ -314,7 +314,15 @@ function BoxLineDiagram({
   const nonSstbFeeders = feedersFor('non_sstb');
   const sstbFeeders = feedersFor('sstb');
   const capGainFeeders = feedersFor('cap_gain');
-  const tiFeeders = feedersFor('ti');
+  // QBI source income (SE / partnership / farm / rental / SSTB) is also
+  // included in TI. Render duplicate "ghost" feeder boxes above TI so the
+  // dual-purpose flow is visible without drawing arrows that span the
+  // entire diagram. Different name prefix keeps the feeder_<id> unique.
+  const tiQbiGhosts: Feeder[] = [...nonSstbFeeders, ...sstbFeeders].map((f) => ({
+    ...f,
+    name: `ti_ghost_${f.name}`,
+  }));
+  const tiFeeders = [...feedersFor('ti'), ...tiQbiGhosts];
 
   // Wage / UBIA cap area (§199A(b)(2)(B)). Each input has a FIXED grid
   // position (col 0 = wages, col 1 = property; row 0 = total, row 1 =
