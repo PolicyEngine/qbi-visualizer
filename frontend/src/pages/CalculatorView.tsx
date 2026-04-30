@@ -581,29 +581,46 @@ function BoxLineDiagram({
       subtitle: wageCapStatusLine ? [wageCapStatusLine] : undefined,
     });
 
-    // Phase-in rate box — Form 8995-A Part III Line 23. Sits between
-    // the Wage cap and the dashed "caps" edge, surfacing the percentage
-    // and the underlying TI / threshold range.
+    // Phase-in stack — three vertically stacked boxes that mirror
+    // Form 8995-A Part III line by line:
+    //   Excess        (L19 − L20): how much QBID exceeds the wage cap
+    //   Phase-in rate (L24/L26)  : (TI − threshold) / phase-in length
+    //   Reduction     (L25/L27)  : Excess × Phase-in rate
+    // The Reduction box's value is what gets subtracted from L5
+    // (qbi_comp_max), so the edge label there just reads "−$X".
     if (inPhaseIn && reductionRate !== undefined) {
       const wageCapH = wageCapStatusLine ? 64 : BH;
-      const gap = Math.max(0, qbiComponentMax - wageCap);
-      const reductionAmount = Math.max(0, qbiComponentMax - businessComponents);
+      const excess = Math.max(0, qbiComponentMax - wageCap);
+      const EXCESS_H = 64;
+      const PHASE_H = 80;
+      const excessY = level2Y + wageCapH + 24;
+      const phaseY = excessY + EXCESS_H + 18;
+      boxes.push({
+        id: 'phase_in_excess',
+        x: WAGE_CAP_X,
+        y: excessY,
+        w: BW,
+        h: EXCESS_H,
+        label: 'Excess',
+        value: excess,
+        formLine: 'L21',
+        kind: 'op',
+        subtitle: ['L5 − wage cap'],
+      });
       boxes.push({
         id: 'phase_in_rate',
         x: WAGE_CAP_X,
-        y: level2Y + wageCapH + 24,
+        y: phaseY,
         w: BW,
-        h: 116,
-        label: 'Phase-in',
+        h: PHASE_H,
+        label: 'Phase-in rate',
         value: reductionRate * 100,
         valueFormat: 'percent',
         formLine: 'L23',
         kind: 'op',
         subtitle: [
           `TI ${formatCurrency(tiBefore)}`,
-          `of ${formatCurrency(threshold!)}–${formatCurrency(threshold! + phaseInLength!)}`,
-          `× gap ${formatCurrency(gap)}`,
-          `= −${formatCurrency(reductionAmount)} reduction`,
+          `into ${formatCurrency(threshold!)}–${formatCurrency(threshold! + phaseInLength!)}`,
         ],
       });
     }
@@ -632,15 +649,14 @@ function BoxLineDiagram({
           ...wageCapInputs
             .filter((f) => f.name.startsWith('sstb_'))
             .map((f) => ({ from: `feeder_${f.name}`, to: 'wage_cap' } as DiagramEdge)),
-          // Route the dashed cap path through the Phase-in box when the
-          // filer is in the §199A(b)(3)(B) phase-in range. The label on
-          // the edge into L5 shows the actual reduction amount —
-          // rate × (qbid_max − cap) — so users can verify
-          // L5_value − reduction = post-cap value directly. (\"caps × rate\"
-          // was misleading because it suggested cap × rate.)
+          // Route the dashed cap path through Excess → Phase-in rate
+          // when the filer is in the §199A(b)(3)(B) phase-in range so
+          // the multiplication that produces the dollar reduction is
+          // visible: Excess × rate = the −$X label landing on L5.
           ...(wageCapActuallyBinds && inPhaseIn
             ? [
-                { from: 'wage_cap', to: 'phase_in_rate' } as DiagramEdge,
+                { from: 'wage_cap', to: 'phase_in_excess', op: 'L5 −' } as DiagramEdge,
+                { from: 'phase_in_excess', to: 'phase_in_rate', op: '×' } as DiagramEdge,
                 {
                   from: 'phase_in_rate',
                   to: 'qbi_comp_max',
