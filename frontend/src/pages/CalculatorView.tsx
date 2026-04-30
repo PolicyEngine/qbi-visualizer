@@ -1,7 +1,5 @@
 import { useState, useCallback } from 'react';
 
-const API_BASE = 'http://localhost:8000';
-
 interface InputDef {
   name: string;
   label: string;
@@ -136,6 +134,7 @@ interface StageRow {
 }
 
 interface Stage {
+  id: string;
   title: string;
   caption?: string;
   total?: number;
@@ -169,6 +168,7 @@ function buildStages(outputs: Outputs): Stage[] {
 
   return [
     {
+      id: 'qbi-buildup',
       title: 'Qualified business income',
       caption: 'Per-person QBI components after SE-tax / health / retirement allocations',
       total: totalQbi,
@@ -182,6 +182,7 @@ function buildStages(outputs: Outputs): Stage[] {
       ],
     },
     {
+      id: 'qbi-components',
       title: 'QBI components (Form 8995 L5 + L9)',
       caption: '20% applied to Total QBI and to REIT/PTP income; per-business wage/UBIA caps and SSTB phase-out reduce the QBI side above the threshold (Form 8995-A Part II/III)',
       rows: [
@@ -195,6 +196,7 @@ function buildStages(outputs: Outputs): Stage[] {
       ],
     },
     {
+      id: 'min-comparison',
       title: 'Income limit and final QBID',
       caption: 'Form 8995 Lines 11–15 / Form 8995-A Part IV',
       rows: [
@@ -206,6 +208,7 @@ function buildStages(outputs: Outputs): Stage[] {
       ],
     },
     {
+      id: 'tax-impact',
       title: 'Tax impact',
       caption: 'How the QBID flows through to the final tax bill',
       rows: [
@@ -217,13 +220,410 @@ function buildStages(outputs: Outputs): Stage[] {
   ];
 }
 
+// =====================================================================
+// BoxLineDiagram — flowchart of the §199A computation graph
+// =====================================================================
+
+interface DiagramBox {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  label: string;
+  value?: number;
+  formLine?: string;
+  kind: 'input' | 'op' | 'final';
+  binds?: boolean;
+  subtitle?: string | string[]; // small line(s) below the value
+}
+
+interface DiagramEdge {
+  from: string;
+  to: string;
+  op?: string; // optional inline label, e.g. "×0.20", "−", "MIN"
+}
+
+function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<string, any> }) {
+  const nonSstb = num(outputs, 'qualified_business_income');
+  const sstb = num(outputs, 'sstb_qualified_business_income');
+  const totalQbi = nonSstb + sstb;
+  const reitPtp = num(outputs, 'qualified_reit_and_ptp_income');
+  const qbidAmount = num(outputs, 'qbid_amount');
+  const tiBefore = num(outputs, 'taxable_income_less_qbid');
+  const netCapGain = num(outputs, 'adjusted_net_capital_gain');
+
+  const qbiComponentMax = 0.20 * Math.max(0, totalQbi);
+  const reitPtpComponent = 0.20 * Math.max(0, reitPtp);
+  const tiLessCapGain = Math.max(0, tiBefore - netCapGain);
+  const incomeLimit = 0.20 * tiLessCapGain;
+  const finalQbid = Math.min(qbidAmount, incomeLimit);
+  const reitPtpComponentValue = reitPtpComponent;
+  const businessComponents = Math.max(0, qbidAmount - reitPtpComponentValue);
+  const reductionFromCaps = Math.max(0, qbiComponentMax - businessComponents);
+  // Treat sub-dollar deltas as floating-point noise rather than a real cap.
+  const meaningfulReduction = reductionFromCaps >= 1;
+  // Don't mark anything as binding when both candidates are zero (stale state).
+  const hasOutputs = qbidAmount > 0 || incomeLimit > 0;
+  const qbiDeductionBinds = hasOutputs && qbidAmount <= incomeLimit;
+  const incomeLimitBinds = hasOutputs && !qbiDeductionBinds;
+
+  // Build raw-input feeders aligned to Form 8995 Line 1 / Line 6 / Line 12.
+  // Only non-zero, qualified inputs render. Each feeder hangs above its
+  // target QBI bucket and is connected by an arrow.
+  type Feeder = { name: string; label: string; value: number; formLine: string };
+  const isQualified = (name: string) =>
+    inputs[`${name}_would_be_qualified`] === undefined ||
+    inputs[`${name}_would_be_qualified`] === true;
+  const inputVal = (name: string): number => Number(inputs[name] ?? 0);
+
+  const feedersFor = (target: 'non_sstb' | 'sstb' | 'cap_gain'): Feeder[] => {
+    if (target === 'non_sstb') {
+      return [
+        { name: 'self_employment_income', label: 'Self-employment', formLine: 'L1' },
+        { name: 'partnership_s_corp_income', label: 'Partnership / S-corp', formLine: 'L1' },
+        { name: 'farm_operations_income', label: 'Farm operations', formLine: 'L1' },
+        { name: 'farm_rent_income', label: 'Farm rental', formLine: 'L1' },
+        { name: 'rental_income', label: 'Rental', formLine: 'L1' },
+        { name: 'estate_income', label: 'Estate / trust', formLine: 'L1' },
+      ]
+        .filter((f) => inputVal(f.name) > 0 && isQualified(f.name))
+        .map((f) => ({ ...f, value: inputVal(f.name) }));
+    }
+    if (target === 'sstb') {
+      return [{ name: 'sstb_self_employment_income', label: 'SSTB SE income', formLine: 'L1 (SSTB)' }]
+        .filter((f) => inputVal(f.name) > 0 && isQualified(f.name))
+        .map((f) => ({ ...f, value: inputVal(f.name) }));
+    }
+    // cap_gain feeders
+    return [
+      { name: 'long_term_capital_gains', label: 'Long-term capital gains', formLine: 'L12' },
+      { name: 'qualified_dividend_income', label: 'Qualified dividends', formLine: 'L12' },
+    ]
+      .filter((f) => inputVal(f.name) > 0)
+      .map((f) => ({ ...f, value: inputVal(f.name) }));
+  };
+
+  const nonSstbFeeders = feedersFor('non_sstb');
+  const sstbFeeders = feedersFor('sstb');
+  const capGainFeeders = feedersFor('cap_gain');
+
+  // Wage / UBIA cap area (§199A(b)(2)(B))
+  type WageInput = { name: string; label: string; value: number };
+  const wageCapInputs: WageInput[] = [
+    { name: 'w2_wages_from_qualified_business', label: 'W-2 wages' },
+    { name: 'unadjusted_basis_qualified_property', label: 'UBIA' },
+    { name: 'sstb_w2_wages_from_qualified_business', label: 'SSTB W-2' },
+    { name: 'sstb_unadjusted_basis_qualified_property', label: 'SSTB UBIA' },
+  ]
+    .map((f) => ({ ...f, value: inputVal(f.name) }))
+    .filter((f) => f.value > 0);
+  const w2 = inputVal('w2_wages_from_qualified_business');
+  const ubiaVal = inputVal('unadjusted_basis_qualified_property');
+  const wageCap = Math.max(0.50 * w2, 0.25 * w2 + 0.025 * ubiaVal);
+  const showWageCap = wageCapInputs.length > 0;
+  // The wage cap is "actually contributing" when the reduction is larger
+  // than what SSTB phase-out alone could explain (max SSTB reduction =
+  // 20% × SSTB QBI when applicable_rate hits 0). Below threshold this
+  // is always false, so the dashed cap edge stays hidden.
+  const sstbMaxPossibleReduction = 0.20 * Math.max(0, sstb);
+  const wageCapActuallyBinds =
+    showWageCap && wageCap < qbiComponentMax && reductionFromCaps > sstbMaxPossibleReduction + 1;
+
+  // Vertical space the feeder area needs (max stack height across columns).
+  // Box height needs to clear both the label (y=18 baseline) and the value
+  // (y=36 baseline) — at 36 the value glyphs were spilling past the bottom.
+  const FEEDER_BH = 46;
+  const FEEDER_GAP = 8;
+  const maxFeederStack = Math.max(
+    nonSstbFeeders.length,
+    sstbFeeders.length,
+    capGainFeeders.length,
+    wageCapInputs.length,
+  );
+  const feederAreaH = maxFeederStack > 0 ? maxFeederStack * (FEEDER_BH + FEEDER_GAP) + 24 : 0;
+
+  // Layout grid (top-down). Width is computed dynamically below from the
+  // rightmost rendered box so the diagram fills its container with no
+  // wasted gutters.
+  const BW = 150; // box width
+  const BH = 52;  // box height
+  // When the wage-cap area is shown, it lives on the LEFT and pushes the
+  // rest of the diagram to the right by 160px.
+  const SHIFT = showWageCap ? 160 : 0;
+  const WAGE_CAP_X = 10;
+  const level0Y = feederAreaH + 10;
+  const level1Y = level0Y + 120;
+  const level2Y = level1Y + 120;
+  const level3Y = level2Y + 130;
+  const level4Y = level3Y + 130;
+  const H = level4Y + 80;
+
+  const boxes: DiagramBox[] = [
+    // Level 0 — QBI buckets / TI / capital gain (PolicyEngine outputs)
+    { id: 'non_sstb', x: 10 + SHIFT, y: level0Y, w: BW, h: BH, label: 'Non-SSTB QBI', value: nonSstb, formLine: 'L2', kind: 'input' },
+    { id: 'sstb', x: 170 + SHIFT, y: level0Y, w: BW, h: BH, label: 'SSTB QBI', value: sstb, formLine: 'L2 (SSTB)', kind: 'input' },
+    { id: 'reit_ptp', x: 330 + SHIFT, y: level0Y, w: BW, h: BH, label: 'REIT/PTP income', value: reitPtp, formLine: 'L6', kind: 'input' },
+    { id: 'ti', x: 490 + SHIFT, y: level0Y, w: BW, h: BH, label: 'Taxable income', value: tiBefore, formLine: 'L11', kind: 'input' },
+    { id: 'cap_gain', x: 650 + SHIFT, y: level0Y, w: BW, h: BH, label: 'Net capital gain', value: netCapGain, formLine: 'L12', kind: 'input' },
+    // Level 1 — first ops
+    { id: 'total_qbi', x: 90 + SHIFT, y: level1Y, w: BW, h: BH, label: 'Total QBI', value: totalQbi, formLine: 'L4', kind: 'op' },
+    { id: 'ti_less_cg', x: 570 + SHIFT, y: level1Y, w: BW, h: BH, label: 'TI − net cap gain', value: tiLessCapGain, formLine: 'L13', kind: 'op' },
+    // Level 2 — × 20%
+    {
+      id: 'qbi_comp_max',
+      x: 90 + SHIFT,
+      y: level2Y,
+      w: BW,
+      h: meaningfulReduction ? 68 : BH,
+      label: '20% × Total QBI',
+      value: qbiComponentMax,
+      formLine: 'L5',
+      kind: 'op',
+      // When wage caps and/or SSTB phase-out actually trim the QBI side
+      // before it merges into QBI deduction, show the post-cap value
+      // here at the source rather than as a downstream "after caps" note.
+      subtitle: meaningfulReduction ? `→ ${formatCurrency(businessComponents)} after caps` : undefined,
+    },
+    { id: 'reit_ptp_comp', x: 330 + SHIFT, y: level2Y, w: BW, h: BH, label: '20% × REIT/PTP', value: reitPtpComponent, formLine: 'L9', kind: 'op' },
+    { id: 'income_limit', x: 570 + SHIFT, y: level2Y, w: BW, h: BH, label: 'Income limit', value: incomeLimit, formLine: 'L14', kind: 'op', binds: incomeLimitBinds },
+    // Level 3 — sum into QBI deduction
+    {
+      id: 'qbi_deduction',
+      x: 210 + SHIFT,
+      y: level3Y,
+      w: BW,
+      h: BH,
+      label: 'QBI deduction',
+      value: qbidAmount,
+      formLine: 'L10',
+      kind: 'op',
+      binds: qbiDeductionBinds,
+    },
+    // Level 4 — final min
+    { id: 'final_qbid', x: 390 + SHIFT, y: level4Y, w: 180, h: 60, label: 'Final QBID', value: finalQbid, formLine: 'L15', kind: 'final' },
+  ];
+
+  // Add feeder boxes (non-zero raw inputs) above their target QBI bucket.
+  // Bottom-align: single feeders sit just above the target rather than
+  // floating at the top of the feeder area.
+  const addFeederColumn = (feeders: Feeder[], targetX: number) => {
+    const offset = maxFeederStack - feeders.length; // empty rows above
+    feeders.forEach((f, i) => {
+      boxes.push({
+        id: `feeder_${f.name}`,
+        x: targetX,
+        y: 10 + (offset + i) * (FEEDER_BH + FEEDER_GAP),
+        w: BW,
+        h: FEEDER_BH,
+        label: f.label,
+        value: f.value,
+        formLine: f.formLine,
+        kind: 'input',
+      });
+    });
+  };
+  addFeederColumn(nonSstbFeeders, 10 + SHIFT);
+  addFeederColumn(sstbFeeders, 170 + SHIFT);
+  addFeederColumn(capGainFeeders, 650 + SHIFT);
+  // Wage / UBIA cap inputs sit above the Wage cap box on the LEFT.
+  // No formLine here — these are user inputs, not Form 8995 line items.
+  if (showWageCap) {
+    addFeederColumn(wageCapInputs.map((w) => ({ name: w.name, label: w.label, value: w.value, formLine: '' })), WAGE_CAP_X);
+  }
+
+  // Tag the Non-SSTB QBI box with the SE-tax / health / retirement
+  // allocation reduction (when gross > net) so the shrinkage is visible
+  // without overloading individual feeder edges.
+  const grossNonSstb = nonSstbFeeders.reduce((s, f) => s + f.value, 0);
+  if (grossNonSstb > nonSstb && nonSstb > 0) {
+    const nonSstbBox = boxes.find((b) => b.id === 'non_sstb')!;
+    nonSstbBox.subtitle = `−${formatCurrency(grossNonSstb - nonSstb)} SE alloc.`;
+    nonSstbBox.h = 68;
+  }
+  const grossSstb = sstbFeeders.reduce((s, f) => s + f.value, 0);
+  if (grossSstb > sstb && sstb > 0) {
+    const sstbBox = boxes.find((b) => b.id === 'sstb')!;
+    sstbBox.subtitle = `−${formatCurrency(grossSstb - sstb)} SE alloc.`;
+    sstbBox.h = 68;
+  }
+
+  // Wage cap node (informational): shows the computed wage / UBIA cap
+  // value. It connects to L10 with a dashed "caps" edge — the cap only
+  // actually binds above the threshold, but surfacing it always lets
+  // users see how their W-2 / UBIA inputs relate to the deduction.
+  if (showWageCap) {
+    boxes.push({
+      id: 'wage_cap',
+      x: WAGE_CAP_X,
+      y: level2Y,
+      w: BW,
+      h: wageCapActuallyBinds ? 84 : 96,
+      label: 'Wage cap',
+      value: wageCap,
+      formLine: '(b)(2)(B)',
+      kind: 'op',
+      subtitle: wageCapActuallyBinds
+        ? ['max(50% W-2,', '25% W-2 + 2.5% UBIA)']
+        : ['max(50% W-2,', '25% W-2 + 2.5% UBIA)', '(not binding here)'],
+    });
+  }
+
+  const edges: DiagramEdge[] = [
+    // Feeders → QBI buckets. Multi-feeder columns get a Σ on the second-
+    // and-later edges to mark the merge; the SE-tax allocation reduction
+    // shows up as a subtitle on the destination box, not on an edge.
+    ...nonSstbFeeders.map((f, i) => ({ from: `feeder_${f.name}`, to: 'non_sstb', op: i > 0 ? 'Σ' : undefined })),
+    ...sstbFeeders.map((f) => ({ from: `feeder_${f.name}`, to: 'sstb' })),
+    ...capGainFeeders.map((f, i) => ({ from: `feeder_${f.name}`, to: 'cap_gain', op: i > 0 ? 'Σ' : undefined })),
+    // Wage cap input feeders → Wage cap node. The dashed constraint
+    // edge from Wage cap to the 20% × Total QBI box only renders when
+    // the cap actually reduces the QBI side; below the §199A threshold
+    // the cap exists but doesn't fire, so omitting the edge avoids the
+    // misleading impression that a $500 cap is shrinking $18,587.
+    ...(showWageCap
+      ? [
+          ...wageCapInputs.map((f) => ({ from: `feeder_${f.name}`, to: 'wage_cap' })),
+          ...(wageCapActuallyBinds
+            ? [{ from: 'wage_cap', to: 'qbi_comp_max', op: 'caps' } as DiagramEdge]
+            : []),
+        ]
+      : []),
+    // Level 0 → first ops
+    { from: 'non_sstb', to: 'total_qbi' },
+    { from: 'sstb', to: 'total_qbi', op: 'Σ' },
+    { from: 'ti', to: 'ti_less_cg' },
+    { from: 'cap_gain', to: 'ti_less_cg', op: '−' },
+    // First ops & REIT/PTP → ×20%
+    { from: 'total_qbi', to: 'qbi_comp_max', op: '×0.20' },
+    { from: 'reit_ptp', to: 'reit_ptp_comp', op: '×0.20' },
+    { from: 'ti_less_cg', to: 'income_limit', op: '×0.20' },
+    // QBI components → QBI deduction (sum implied by the merge)
+    { from: 'qbi_comp_max', to: 'qbi_deduction' },
+    { from: 'reit_ptp_comp', to: 'qbi_deduction', op: 'Σ' },
+    // Final min
+    { from: 'qbi_deduction', to: 'final_qbid' },
+    { from: 'income_limit', to: 'final_qbid', op: 'MIN' },
+  ];
+
+  const boxById = (id: string) => boxes.find((b) => b.id === id)!;
+
+  // Anchor points on a box
+  const bottom = (b: DiagramBox) => ({ x: b.x + b.w / 2, y: b.y + b.h });
+  const top = (b: DiagramBox) => ({ x: b.x + b.w / 2, y: b.y });
+
+  // Tighten the viewBox to the actual content extent so the diagram
+  // is centered horizontally within whatever container width Tailwind
+  // gives us (no empty gutters on the right).
+  const contentRight = Math.max(...boxes.map((b) => b.x + b.w));
+  const tightW = contentRight + 10;
+
+  return (
+    <div className="mb-6 bg-white rounded-pe-lg border border-pe-gray-200 p-4">
+      <h3 className="text-sm font-semibold text-pe-text-primary mb-3">Computation graph</h3>
+      <svg viewBox={`0 0 ${tightW} ${H}`} className="w-full" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#9CA3AF" />
+          </marker>
+          <marker id="arrow-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#319795" />
+          </marker>
+          <marker id="arrow-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#D97706" />
+          </marker>
+        </defs>
+
+        {/* Edges */}
+        {edges.map((e, i) => {
+          const from = boxById(e.from);
+          const to = boxById(e.to);
+          const a = bottom(from);
+          const b = top(to);
+          // Smooth cubic curve for vertical-ish flow
+          const dy = b.y - a.y;
+          const cp1 = { x: a.x, y: a.y + dy * 0.5 };
+          const cp2 = { x: b.x, y: b.y - dy * 0.5 };
+          const isFinalEdge = e.to === 'final_qbid';
+          const isConstraint = e.from === 'wage_cap';
+          const stroke = isFinalEdge ? '#319795' : isConstraint ? '#D97706' : '#9CA3AF';
+          const marker = isFinalEdge ? 'url(#arrow-teal)' : isConstraint ? 'url(#arrow-amber)' : 'url(#arrow)';
+          const opLabelW = e.op && e.op.length > 4 ? Math.max(36, e.op.length * 7) : 36;
+          return (
+            <g key={i}>
+              <path
+                d={`M ${a.x} ${a.y} C ${cp1.x} ${cp1.y}, ${cp2.x} ${cp2.y}, ${b.x} ${b.y - 6}`}
+                stroke={stroke}
+                strokeWidth={isFinalEdge ? 2 : 1.5}
+                strokeDasharray={isConstraint ? '5 4' : undefined}
+                fill="none"
+                markerEnd={marker}
+                opacity={isFinalEdge ? 1 : 0.85}
+              />
+              {e.op && (
+                <g transform={`translate(${(a.x + b.x) / 2}, ${(a.y + b.y) / 2})`}>
+                  <rect x={-opLabelW / 2} y={-9} width={opLabelW} height={18} rx={9} fill="white" stroke="#E2E8F0" strokeWidth={1} />
+                  <text x={0} y={4} textAnchor="middle" fontSize="10" fontFamily="ui-monospace, monospace" fill={isConstraint ? '#D97706' : '#4B5563'}>
+                    {e.op}
+                  </text>
+                </g>
+              )}
+            </g>
+          );
+        })}
+
+        {/* Boxes */}
+        {boxes.map((b) => {
+          const fill = b.kind === 'final' ? '#319795' : b.binds ? '#E6FFFA' : 'white';
+          const stroke = b.kind === 'final' ? '#319795' : b.binds ? '#319795' : '#CBD5E1';
+          const labelColor = b.kind === 'final' ? '#FFFFFF' : '#000000';
+          const valueColor = b.kind === 'final' ? '#FFFFFF' : b.binds ? '#319795' : '#000000';
+          const subColor = b.kind === 'final' ? '#B2F5EA' : '#9CA3AF';
+          return (
+            <g key={b.id}>
+              <rect
+                x={b.x}
+                y={b.y}
+                width={b.w}
+                height={b.h}
+                rx={6}
+                fill={fill}
+                stroke={stroke}
+                strokeWidth={b.kind === 'final' || b.binds ? 2 : 1}
+              />
+              <text x={b.x + b.w / 2} y={b.y + 18} textAnchor="middle" fontSize="11" fill={labelColor} fontWeight={b.kind === 'final' ? 600 : 500}>
+                {b.label}
+                {b.formLine && <tspan dx={4} fontSize="9" fill={subColor} fontFamily="ui-monospace, monospace">{b.formLine}</tspan>}
+              </text>
+              {b.value !== undefined && (
+                <text x={b.x + b.w / 2} y={b.y + 36} textAnchor="middle" fontSize="13" fontWeight={600} fill={valueColor} fontFamily="ui-monospace, monospace">
+                  {formatCurrency(b.value)}
+                </text>
+              )}
+              {b.subtitle &&
+                (Array.isArray(b.subtitle) ? b.subtitle : [b.subtitle]).map((line, i) => (
+                  <text key={i} x={b.x + b.w / 2} y={b.y + 52 + i * 11} textAnchor="middle" fontSize="9" fill="#9CA3AF">
+                    {line}
+                  </text>
+                ))}
+              {b.binds && b.kind !== 'final' && (
+                <text x={b.x + b.w - 4} y={b.y + 11} textAnchor="end" fontSize="8" fill="#319795" fontWeight={700}>★ BINDS</text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
 function BreakdownStaged({ outputs }: { outputs: Outputs }) {
   const stages = buildStages(outputs);
   return (
     <div className="mb-6 space-y-4">
       <h3 className="text-sm font-semibold text-pe-text-primary">QBI computation breakdown</h3>
       {stages.map((stage) => (
-        <div key={stage.title} className="bg-white rounded-pe-lg border border-pe-gray-200 overflow-hidden">
+        <div key={stage.id} className="bg-white rounded-pe-lg border border-pe-gray-200 overflow-hidden">
           <div className="px-5 py-3 bg-pe-gray-50 border-b border-pe-gray-200 flex items-baseline justify-between gap-4">
             <div>
               <div className="text-sm font-semibold text-pe-text-primary">{stage.title}</div>
@@ -292,6 +692,11 @@ export default function CalculatorView() {
   const [error, setError] = useState<string | null>(null);
   const [openSections, setOpenSections] = useState<Set<string>>(new Set(['QBI Income Sources']));
   const [parametersOpen, setParametersOpen] = useState(false);
+  const [resultTab, setResultTab] = useState<'breakdown' | 'diagram'>('diagram');
+  // Track whether the user has ever clicked Calculate. Lets us keep the
+  // result-panel structure visible after the first calc, even when the
+  // user edits inputs and the computed values get cleared.
+  const [hasCalculated, setHasCalculated] = useState(false);
 
   const toggleSection = (name: string) => {
     setOpenSections((prev) => {
@@ -304,13 +709,17 @@ export default function CalculatorView() {
 
   const handleChange = useCallback((name: string, value: any) => {
     setInputs((prev) => ({ ...prev, [name]: value }));
+    // Stale-result protection: any input change blanks the displayed
+    // result until the user hits Calculate again.
+    setResult(null);
+    setError(null);
   }, []);
 
   const handleCalculate = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/qbi/calculate`, {
+      const res = await fetch('/api/qbi/calculate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(inputs),
@@ -321,6 +730,7 @@ export default function CalculatorView() {
       }
       const data = await res.json();
       setResult(data);
+      setHasCalculated(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Calculation failed');
     } finally {
@@ -511,71 +921,108 @@ export default function CalculatorView() {
       {/* Right: Results */}
       <div className="flex-1 overflow-y-auto p-8">
         {error && (
-          <div className="max-w-3xl mx-auto mb-6 p-4 bg-red-50 border border-pe-error/20 rounded-pe-lg text-pe-error text-sm">
+          <div className="max-w-6xl mx-auto mb-6 p-4 bg-red-50 border border-pe-error/20 rounded-pe-lg text-pe-error text-sm">
             {error}
           </div>
         )}
 
-        {result ? (
-          <div className="max-w-3xl mx-auto">
-            {/* Primary result */}
-            {primaryOutput && (
-              <div className="mb-8 bg-white rounded-2xl border border-pe-gray-200 p-8 text-center shadow-sm">
-                <div className="text-sm text-pe-text-secondary mb-2">{primaryOutput.label}</div>
-                <div className="text-5xl font-bold text-pe-teal-500">
-                  {typeof result.outputs[primaryOutput.name] === 'number'
-                    ? formatCurrencyLarge(result.outputs[primaryOutput.name] as number)
-                    : '$0'}
-                </div>
-                <div className="mt-3 text-sm text-pe-text-tertiary">
-                  {result.filing_status.replace(/_/g, ' ').toLowerCase()} &middot; Tax year {result.year}
-                </div>
-              </div>
-            )}
-
-            {/* QBI Breakdown — staged */}
-            <BreakdownStaged outputs={result.outputs} />
-
-            {/* Parameters Used — collapsible */}
-            {result.parameters && Object.keys(result.parameters).length > 0 && (
-              <div className="mb-6 bg-white rounded-pe-lg border border-pe-gray-200 overflow-hidden">
-                <button
-                  onClick={() => setParametersOpen((v) => !v)}
-                  className="w-full flex items-center justify-between px-5 py-3 bg-pe-gray-50 hover:bg-pe-gray-100 transition-colors text-left"
-                >
-                  <div className="flex items-center gap-2">
-                    <Chevron open={parametersOpen} />
-                    <span className="text-sm font-semibold text-pe-text-primary">
-                      Model parameters ({result.year})
-                    </span>
-                    <span className="text-xs text-pe-text-tertiary">
-                      ({Object.keys(result.parameters).length})
-                    </span>
+        {(result || hasCalculated) ? (
+          (() => {
+            const isStale = !result;
+            const displayOutputs: Outputs = result?.outputs ?? {};
+            return (
+              <div className="max-w-6xl mx-auto">
+                {isStale && (
+                  <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-pe-lg text-sm text-amber-800 flex items-center justify-between gap-4">
+                    <span>Inputs changed — click <span className="font-semibold">Calculate</span> to refresh the computed values.</span>
                   </div>
-                </button>
-                {parametersOpen && (
-                  <table className="w-full text-sm">
-                    <tbody className="divide-y divide-pe-gray-100 border-t border-pe-gray-100">
-                      {Object.entries(result.parameters).map(([key, val]) => {
-                        const isRate = key.includes('rate');
-                        const label = key
-                          .replace(/_/g, ' ')
-                          .replace(/^\w/, (c) => c.toUpperCase());
-                        return (
-                          <tr key={key}>
-                            <td className="px-5 py-2.5 text-pe-text-secondary">{label}</td>
-                            <td className="px-5 py-2.5 text-right font-mono text-pe-text-primary">
-                              {isRate ? `${(val * 100).toFixed(1)}%` : formatCurrency(val)}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                )}
+
+                {/* Primary result */}
+                {primaryOutput && (
+                  <div className={`mb-8 bg-white rounded-2xl border border-pe-gray-200 p-8 text-center shadow-sm ${isStale ? 'opacity-60' : ''}`}>
+                    <div className="text-sm text-pe-text-secondary mb-2">{primaryOutput.label}</div>
+                    <div className={`text-5xl font-bold ${isStale ? 'text-pe-gray-300' : 'text-pe-teal-500'}`}>
+                      {isStale
+                        ? '—'
+                        : typeof result!.outputs[primaryOutput.name] === 'number'
+                        ? formatCurrencyLarge(result!.outputs[primaryOutput.name] as number)
+                        : '$0'}
+                    </div>
+                    <div className="mt-3 text-sm text-pe-text-tertiary">
+                      {(result?.filing_status ?? inputs.filing_status).replace(/_/g, ' ').toLowerCase()} &middot; Tax year {result?.year ?? inputs.year}
+                    </div>
+                  </div>
+                )}
+
+                {/* Tabs: numerical breakdown vs computation graph */}
+                <div className="mb-3 flex items-center gap-1 bg-pe-gray-100 p-1 rounded-pe-lg w-fit">
+                  {[
+                    { id: 'diagram' as const, label: 'Diagram' },
+                    { id: 'breakdown' as const, label: 'Breakdown' },
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setResultTab(tab.id)}
+                      className={`px-3 py-1.5 rounded-pe-md text-xs font-medium transition-all ${
+                        resultTab === tab.id
+                          ? 'bg-white text-pe-text-primary shadow-sm'
+                          : 'text-pe-text-secondary hover:text-pe-text-primary'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+
+                {resultTab === 'breakdown' ? (
+                  <BreakdownStaged outputs={displayOutputs} />
+                ) : (
+                  <BoxLineDiagram outputs={displayOutputs} inputs={inputs} />
+                )}
+
+                {/* Parameters Used — collapsible (hidden when stale) */}
+                {result && result.parameters && Object.keys(result.parameters).length > 0 && (
+                  <div className="mb-6 bg-white rounded-pe-lg border border-pe-gray-200 overflow-hidden">
+                    <button
+                      onClick={() => setParametersOpen((v) => !v)}
+                      className="w-full flex items-center justify-between px-5 py-3 bg-pe-gray-50 hover:bg-pe-gray-100 transition-colors text-left"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Chevron open={parametersOpen} />
+                        <span className="text-sm font-semibold text-pe-text-primary">
+                          Model parameters ({result.year})
+                        </span>
+                        <span className="text-xs text-pe-text-tertiary">
+                          ({Object.keys(result.parameters).length})
+                        </span>
+                      </div>
+                    </button>
+                    {parametersOpen && (
+                      <table className="w-full text-sm">
+                        <tbody className="divide-y divide-pe-gray-100 border-t border-pe-gray-100">
+                          {Object.entries(result.parameters).map(([key, val]) => {
+                            const isRate = key.includes('rate');
+                            const label = key
+                              .replace(/_/g, ' ')
+                              .replace(/^\w/, (c) => c.toUpperCase());
+                            return (
+                              <tr key={key}>
+                                <td className="px-5 py-2.5 text-pe-text-secondary">{label}</td>
+                                <td className="px-5 py-2.5 text-right font-mono text-pe-text-primary">
+                                  {isRate ? `${(val * 100).toFixed(1)}%` : formatCurrency(val)}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
                 )}
               </div>
-            )}
-          </div>
+            );
+          })()
         ) : (
           <div className="h-full flex items-center justify-center">
             <div className="text-center max-w-md">
