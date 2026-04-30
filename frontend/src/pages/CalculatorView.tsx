@@ -244,7 +244,7 @@ interface DiagramEdge {
   op?: string; // optional inline label, e.g. "×0.20", "−", "MIN"
 }
 
-function BoxLineDiagram({ outputs }: { outputs: Outputs }) {
+function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<string, any> }) {
   const nonSstb = num(outputs, 'qualified_business_income');
   const sstb = num(outputs, 'sstb_qualified_business_income');
   const totalQbi = nonSstb + sstb;
@@ -263,31 +263,82 @@ function BoxLineDiagram({ outputs }: { outputs: Outputs }) {
   const reductionFromCaps = Math.max(0, qbiComponentMax - businessComponents);
   const qbiDeductionBinds = qbidAmount <= incomeLimit;
 
-  // Layout grid (top-down, 5 levels)
+  // Build raw-input feeders aligned to Form 8995 Line 1 / Line 6 / Line 12.
+  // Only non-zero, qualified inputs render. Each feeder hangs above its
+  // target QBI bucket and is connected by an arrow.
+  type Feeder = { name: string; label: string; value: number; formLine: string };
+  const isQualified = (name: string) =>
+    inputs[`${name}_would_be_qualified`] === undefined ||
+    inputs[`${name}_would_be_qualified`] === true;
+  const inputVal = (name: string): number => Number(inputs[name] ?? 0);
+
+  const feedersFor = (target: 'non_sstb' | 'sstb' | 'cap_gain'): Feeder[] => {
+    if (target === 'non_sstb') {
+      return [
+        { name: 'self_employment_income', label: 'Self-employment', formLine: 'L1' },
+        { name: 'partnership_s_corp_income', label: 'Partnership / S-corp', formLine: 'L1' },
+        { name: 'farm_operations_income', label: 'Farm operations', formLine: 'L1' },
+        { name: 'farm_rent_income', label: 'Farm rental', formLine: 'L1' },
+        { name: 'rental_income', label: 'Rental', formLine: 'L1' },
+        { name: 'estate_income', label: 'Estate / trust', formLine: 'L1' },
+      ]
+        .filter((f) => inputVal(f.name) > 0 && isQualified(f.name))
+        .map((f) => ({ ...f, value: inputVal(f.name) }));
+    }
+    if (target === 'sstb') {
+      return [{ name: 'sstb_self_employment_income', label: 'SSTB self-employment', formLine: 'L1 (SSTB)' }]
+        .filter((f) => inputVal(f.name) > 0 && isQualified(f.name))
+        .map((f) => ({ ...f, value: inputVal(f.name) }));
+    }
+    // cap_gain feeders
+    return [
+      { name: 'long_term_capital_gains', label: 'Long-term capital gains', formLine: 'L12' },
+      { name: 'qualified_dividend_income', label: 'Qualified dividends', formLine: 'L12' },
+    ]
+      .filter((f) => inputVal(f.name) > 0)
+      .map((f) => ({ ...f, value: inputVal(f.name) }));
+  };
+
+  const nonSstbFeeders = feedersFor('non_sstb');
+  const sstbFeeders = feedersFor('sstb');
+  const capGainFeeders = feedersFor('cap_gain');
+
+  // Vertical space the feeder area needs (max stack height across columns).
+  const FEEDER_BH = 36;
+  const FEEDER_GAP = 6;
+  const maxFeederStack = Math.max(nonSstbFeeders.length, sstbFeeders.length, capGainFeeders.length);
+  const feederAreaH = maxFeederStack > 0 ? maxFeederStack * (FEEDER_BH + FEEDER_GAP) + 24 : 0;
+
+  // Layout grid (top-down)
   const W = 800;
-  const H = 600;
   const BW = 150; // box width
   const BH = 52;  // box height
+  const level0Y = feederAreaH + 10;
+  const level1Y = level0Y + 120;
+  const level2Y = level1Y + 120;
+  const level3Y = level2Y + 130;
+  const level4Y = level3Y + 130;
+  const H = level4Y + 80;
 
   const boxes: DiagramBox[] = [
-    // Level 0 — inputs
-    { id: 'non_sstb', x: 10, y: 10, w: BW, h: BH, label: 'Non-SSTB QBI', value: nonSstb, kind: 'input' },
-    { id: 'sstb', x: 170, y: 10, w: BW, h: BH, label: 'SSTB QBI', value: sstb, kind: 'input' },
-    { id: 'reit_ptp', x: 330, y: 10, w: BW, h: BH, label: 'REIT/PTP income', value: reitPtp, kind: 'input' },
-    { id: 'ti', x: 490, y: 10, w: BW, h: BH, label: 'Taxable income', value: tiBefore, kind: 'input' },
-    { id: 'cap_gain', x: 650, y: 10, w: BW, h: BH, label: 'Net capital gain', value: netCapGain, kind: 'input' },
+    // Level 0 — QBI buckets / TI / capital gain (PolicyEngine outputs)
+    { id: 'non_sstb', x: 10, y: level0Y, w: BW, h: BH, label: 'Non-SSTB QBI', value: nonSstb, formLine: 'L2', kind: 'input' },
+    { id: 'sstb', x: 170, y: level0Y, w: BW, h: BH, label: 'SSTB QBI', value: sstb, formLine: 'L2 (SSTB)', kind: 'input' },
+    { id: 'reit_ptp', x: 330, y: level0Y, w: BW, h: BH, label: 'REIT/PTP income', value: reitPtp, formLine: 'L6', kind: 'input' },
+    { id: 'ti', x: 490, y: level0Y, w: BW, h: BH, label: 'Taxable income', value: tiBefore, formLine: 'L11', kind: 'input' },
+    { id: 'cap_gain', x: 650, y: level0Y, w: BW, h: BH, label: 'Net capital gain', value: netCapGain, formLine: 'L12', kind: 'input' },
     // Level 1 — first ops
-    { id: 'total_qbi', x: 90, y: 130, w: BW, h: BH, label: 'Total QBI', value: totalQbi, formLine: 'L4', kind: 'op' },
-    { id: 'ti_less_cg', x: 570, y: 130, w: BW, h: BH, label: 'TI − net cap gain', value: tiLessCapGain, formLine: 'L13', kind: 'op' },
+    { id: 'total_qbi', x: 90, y: level1Y, w: BW, h: BH, label: 'Total QBI', value: totalQbi, formLine: 'L4', kind: 'op' },
+    { id: 'ti_less_cg', x: 570, y: level1Y, w: BW, h: BH, label: 'TI − net cap gain', value: tiLessCapGain, formLine: 'L13', kind: 'op' },
     // Level 2 — × 20%
-    { id: 'qbi_comp_max', x: 90, y: 250, w: BW, h: BH, label: '20% × Total QBI', value: qbiComponentMax, formLine: 'L5', kind: 'op' },
-    { id: 'reit_ptp_comp', x: 330, y: 250, w: BW, h: BH, label: '20% × REIT/PTP', value: reitPtpComponent, formLine: 'L9', kind: 'op' },
-    { id: 'income_limit', x: 570, y: 250, w: BW, h: BH, label: 'Income limit', value: incomeLimit, formLine: 'L14', kind: 'op', binds: !qbiDeductionBinds },
+    { id: 'qbi_comp_max', x: 90, y: level2Y, w: BW, h: BH, label: '20% × Total QBI', value: qbiComponentMax, formLine: 'L5', kind: 'op' },
+    { id: 'reit_ptp_comp', x: 330, y: level2Y, w: BW, h: BH, label: '20% × REIT/PTP', value: reitPtpComponent, formLine: 'L9', kind: 'op' },
+    { id: 'income_limit', x: 570, y: level2Y, w: BW, h: BH, label: 'Income limit', value: incomeLimit, formLine: 'L14', kind: 'op', binds: !qbiDeductionBinds },
     // Level 3 — sum into QBI deduction
     {
       id: 'qbi_deduction',
       x: 210,
-      y: 380,
+      y: level3Y,
       w: BW,
       h: reductionFromCaps > 0 ? 68 : BH,
       label: 'QBI deduction',
@@ -298,11 +349,40 @@ function BoxLineDiagram({ outputs }: { outputs: Outputs }) {
       subtitle: reductionFromCaps > 0 ? `after −${formatCurrency(reductionFromCaps)} wage / SSTB caps` : undefined,
     },
     // Level 4 — final min
-    { id: 'final_qbid', x: 390, y: 510, w: 180, h: 60, label: 'Final QBID', value: finalQbid, formLine: 'L15', kind: 'final' },
+    { id: 'final_qbid', x: 390, y: level4Y, w: 180, h: 60, label: 'Final QBID', value: finalQbid, formLine: 'L15', kind: 'final' },
   ];
 
+  // Add feeder boxes (non-zero raw inputs) above their target QBI bucket.
+  const addFeederColumn = (feeders: Feeder[], targetX: number) => {
+    feeders.forEach((f, i) => {
+      boxes.push({
+        id: `feeder_${f.name}`,
+        x: targetX,
+        y: 10 + i * (FEEDER_BH + FEEDER_GAP),
+        w: BW,
+        h: FEEDER_BH,
+        label: f.label,
+        value: f.value,
+        formLine: f.formLine,
+        kind: 'input',
+      });
+    });
+  };
+  addFeederColumn(nonSstbFeeders, 10);
+  addFeederColumn(sstbFeeders, 170);
+  addFeederColumn(capGainFeeders, 650);
+
   const edges: DiagramEdge[] = [
-    // Inputs → first ops
+    // Feeders → QBI buckets (only present when raw inputs are non-zero)
+    ...nonSstbFeeders.map((f, i) => ({
+      from: `feeder_${f.name}`,
+      to: 'non_sstb',
+      // Show the SE-tax allocation reduction on the last feeder edge
+      op: i === nonSstbFeeders.length - 1 && nonSstb < nonSstbFeeders.reduce((s, x) => s + x.value, 0) ? '− SE alloc.' : undefined,
+    })),
+    ...sstbFeeders.map((f) => ({ from: `feeder_${f.name}`, to: 'sstb' })),
+    ...capGainFeeders.map((f, i) => ({ from: `feeder_${f.name}`, to: 'cap_gain', op: i > 0 ? 'Σ' : undefined })),
+    // Level 0 → first ops
     { from: 'non_sstb', to: 'total_qbi' },
     { from: 'sstb', to: 'total_qbi', op: 'Σ' },
     { from: 'ti', to: 'ti_less_cg' },
@@ -760,7 +840,7 @@ export default function CalculatorView() {
             {resultTab === 'breakdown' ? (
               <BreakdownStaged outputs={result.outputs} />
             ) : (
-              <BoxLineDiagram outputs={result.outputs} />
+              <BoxLineDiagram outputs={result.outputs} inputs={inputs} />
             )}
 
             {/* Parameters Used — collapsible */}
