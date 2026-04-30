@@ -404,11 +404,28 @@ function BoxLineDiagram({
   );
   const feederAreaH = maxFeederStack > 0 ? maxFeederStack * (FEEDER_BH + FEEDER_GAP) + 24 : 0;
 
-  // The wage cap area lives on the LEFT and shifts everything else right
-  // by its width plus 30px padding. Wage cap node sits centered below
-  // the input grid.
-  const SHIFT = showWageCap ? wageGridWidth + 30 : 0;
-  const WAGE_CAP_X = showWageCap ? 10 + (wageGridWidth - BW) / 2 : 10;
+  // Three vertical zones, left to right:
+  //   1. Income-limit zone — TI / cap gain → ti_less_cg → income limit.
+  //      Always shown; two boxes wide so it matches the standard zone.
+  //   2. Wage-cap zone — only when showWageCap. Houses W-2 / UBIA feeders,
+  //      the 50%/25%+UBIA alternatives, the wage cap node, and the
+  //      Excess / Phase-in stack below it.
+  //   3. QBI zone — non-SSTB / SSTB / REIT-PTP and everything that flows
+  //      into qbi_deduction.
+  // Putting both QBID limitations (income limit, wage cap) to the LEFT of
+  // the QBI side mirrors how they constrain the deduction in §199A.
+  const ZONE_GAP = 30;
+  const INCOME_WIDTH = 2 * BW + WAGE_HGAP;
+  const INCOME_X = 10;
+  const WAGE_X = INCOME_X + INCOME_WIDTH + ZONE_GAP;
+  const WAGE_CAP_X = showWageCap ? WAGE_X + (wageGridWidth - BW) / 2 : WAGE_X;
+  // SHIFT is the extra offset applied to the historical "10 + SHIFT" QBI
+  // box positions so the QBI zone starts where the income / wage zones
+  // leave off.
+  const QBI_X = showWageCap
+    ? WAGE_X + wageGridWidth + ZONE_GAP
+    : INCOME_X + INCOME_WIDTH + ZONE_GAP;
+  const SHIFT = QBI_X - 10;
   // When the phase-in math binds, an explicit "After phase-in" box (L26)
   // sits between L5 and qbi_deduction so users can see the post-reduction
   // value as a node, not a subtitle. That insertion adds one vertical
@@ -428,18 +445,20 @@ function BoxLineDiagram({
     // buckets on the RIGHT. The income-limit chain mirrors the wage-cap
     // chain that lives further left, so both QBID limitations sit on the
     // same side of the diagram.
-    { id: 'ti', x: 10 + SHIFT, y: level0Y, w: BW, h: BH, label: 'Taxable income', value: tiBefore, formLine: 'L11', kind: 'input' },
-    { id: 'cap_gain', x: 170 + SHIFT, y: level0Y, w: BW, h: BH, label: 'Net capital gain', value: netCapGain, formLine: 'L12', kind: 'input' },
-    { id: 'non_sstb', x: 330 + SHIFT, y: level0Y, w: BW, h: BH, label: 'Non-SSTB QBI', value: nonSstb, formLine: 'L2', kind: 'input' },
-    { id: 'sstb', x: 490 + SHIFT, y: level0Y, w: BW, h: BH, label: 'SSTB QBI', value: sstb, formLine: 'L2 (SSTB)', kind: 'input' },
-    { id: 'reit_ptp', x: 650 + SHIFT, y: level0Y, w: BW, h: BH, label: 'REIT/PTP income', value: reitPtp, formLine: 'L6', kind: 'input' },
+    // Income zone (far left)
+    { id: 'ti', x: INCOME_X, y: level0Y, w: BW, h: BH, label: 'Taxable income', value: tiBefore, formLine: 'L11', kind: 'input' },
+    { id: 'cap_gain', x: INCOME_X + BW + WAGE_HGAP, y: level0Y, w: BW, h: BH, label: 'Net capital gain', value: netCapGain, formLine: 'L12', kind: 'input' },
+    // QBI zone (right)
+    { id: 'non_sstb', x: 10 + SHIFT, y: level0Y, w: BW, h: BH, label: 'Non-SSTB QBI', value: nonSstb, formLine: 'L2', kind: 'input' },
+    { id: 'sstb', x: 170 + SHIFT, y: level0Y, w: BW, h: BH, label: 'SSTB QBI', value: sstb, formLine: 'L2 (SSTB)', kind: 'input' },
+    { id: 'reit_ptp', x: 330 + SHIFT, y: level0Y, w: BW, h: BH, label: 'REIT/PTP income', value: reitPtp, formLine: 'L6', kind: 'input' },
     // Level 1 — first ops
-    { id: 'ti_less_cg', x: 90 + SHIFT, y: level1Y, w: BW, h: BH, label: 'TI − net cap gain', value: tiLessCapGain, formLine: 'L13', kind: 'op' },
-    { id: 'total_qbi', x: 410 + SHIFT, y: level1Y, w: BW, h: BH, label: 'Total QBI', value: totalQbi, formLine: 'L4', kind: 'op' },
+    { id: 'ti_less_cg', x: INCOME_X + (INCOME_WIDTH - BW) / 2, y: level1Y, w: BW, h: BH, label: 'TI − net cap gain', value: tiLessCapGain, formLine: 'L13', kind: 'op' },
+    { id: 'total_qbi', x: 90 + SHIFT, y: level1Y, w: BW, h: BH, label: 'Total QBI', value: totalQbi, formLine: 'L4', kind: 'op' },
     // Level 2 — × 20%
     {
       id: 'qbi_comp_max',
-      x: 410 + SHIFT,
+      x: 90 + SHIFT,
       y: level2Y,
       w: BW,
       h: meaningfulReduction && !showAfterPhaseInBox ? 68 : BH,
@@ -456,12 +475,12 @@ function BoxLineDiagram({
           ? `→ ${formatCurrency(businessComponents)} after caps`
           : undefined,
     },
-    { id: 'reit_ptp_comp', x: 650 + SHIFT, y: level2Y, w: BW, h: BH, label: '20% × REIT/PTP', value: reitPtpComponent, formLine: 'L9', kind: 'op' },
-    { id: 'income_limit', x: 90 + SHIFT, y: level2Y, w: BW, h: BH, label: 'Income limit', value: incomeLimit, formLine: 'L14', kind: 'op', binds: incomeLimitBinds },
+    { id: 'reit_ptp_comp', x: 330 + SHIFT, y: level2Y, w: BW, h: BH, label: '20% × REIT/PTP', value: reitPtpComponent, formLine: 'L9', kind: 'op' },
+    { id: 'income_limit', x: INCOME_X + (INCOME_WIDTH - BW) / 2, y: level2Y, w: BW, h: BH, label: 'Income limit', value: incomeLimit, formLine: 'L14', kind: 'op', binds: incomeLimitBinds },
     // Level 3 — sum into QBI deduction
     {
       id: 'qbi_deduction',
-      x: 530 + SHIFT,
+      x: 210 + SHIFT,
       y: level3Y,
       w: BW,
       h: BH,
@@ -472,7 +491,19 @@ function BoxLineDiagram({
       binds: qbiDeductionBinds,
     },
     // Level 4 — final min
-    { id: 'final_qbid', x: 295 + SHIFT, y: level4Y, w: 180, h: 60, label: 'Final QBID', value: finalQbid, formLine: 'L15', kind: 'final' },
+    // Center final_qbid between income_limit (left zone) and qbi_deduction
+    // (right zone) since it MIN's the two.
+    {
+      id: 'final_qbid',
+      x: (INCOME_X + INCOME_WIDTH / 2 + 210 + SHIFT + BW / 2) / 2 - 90,
+      y: level4Y,
+      w: 180,
+      h: 60,
+      label: 'Final QBID',
+      value: finalQbid,
+      formLine: 'L15',
+      kind: 'final',
+    },
   ];
 
   // Add feeder boxes (non-zero raw inputs) above their target QBI bucket.
@@ -494,9 +525,9 @@ function BoxLineDiagram({
       });
     });
   };
-  addFeederColumn(capGainFeeders, 170 + SHIFT);
-  addFeederColumn(nonSstbFeeders, 330 + SHIFT);
-  addFeederColumn(sstbFeeders, 490 + SHIFT);
+  addFeederColumn(capGainFeeders, INCOME_X + BW + WAGE_HGAP);
+  addFeederColumn(nonSstbFeeders, 10 + SHIFT);
+  addFeederColumn(sstbFeeders, 170 + SHIFT);
   // Wage cap inputs sit in fixed grid positions: col 0 = wages, col 1
   // = property; row 0 = total, row 1 = SSTB allocable. Each input
   // always lands in its own slot regardless of which others are entered.
@@ -505,7 +536,7 @@ function BoxLineDiagram({
     wageCapInputs.forEach((f) => {
       boxes.push({
         id: `feeder_${f.name}`,
-        x: 10 + f.col * (BW + WAGE_HGAP),
+        x: WAGE_X + f.col * (BW + WAGE_HGAP),
         y: 10 + (offsetRows + f.row) * (FEEDER_BH + FEEDER_GAP),
         w: BW,
         h: FEEDER_BH,
@@ -559,7 +590,7 @@ function BoxLineDiagram({
     // and the Wage cap node at level2Y).
     boxes.push({
       id: 'wage_alt_50',
-      x: 10,
+      x: WAGE_X,
       y: level1Y,
       w: BW,
       h: 64,
@@ -572,7 +603,7 @@ function BoxLineDiagram({
     });
     boxes.push({
       id: 'wage_alt_25_ubia',
-      x: 10 + BW + WAGE_HGAP,
+      x: WAGE_X + BW + WAGE_HGAP,
       y: level1Y,
       w: BW,
       h: 64,
@@ -664,7 +695,7 @@ function BoxLineDiagram({
   if (showAfterPhaseInBox) {
     boxes.push({
       id: 'qbi_comp_after',
-      x: 410 + SHIFT,
+      x: 90 + SHIFT,
       y: afterPhaseInY,
       w: BW,
       h: BH,
