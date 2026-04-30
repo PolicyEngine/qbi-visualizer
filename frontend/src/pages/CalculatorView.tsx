@@ -361,7 +361,21 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
     { id: 'total_qbi', x: 90 + SHIFT, y: level1Y, w: BW, h: BH, label: 'Total QBI', value: totalQbi, formLine: 'L4', kind: 'op' },
     { id: 'ti_less_cg', x: 570 + SHIFT, y: level1Y, w: BW, h: BH, label: 'TI − net cap gain', value: tiLessCapGain, formLine: 'L13', kind: 'op' },
     // Level 2 — × 20%
-    { id: 'qbi_comp_max', x: 90 + SHIFT, y: level2Y, w: BW, h: BH, label: '20% × Total QBI', value: qbiComponentMax, formLine: 'L5', kind: 'op' },
+    {
+      id: 'qbi_comp_max',
+      x: 90 + SHIFT,
+      y: level2Y,
+      w: BW,
+      h: reductionFromCaps > 0 ? 68 : BH,
+      label: '20% × Total QBI',
+      value: qbiComponentMax,
+      formLine: 'L5',
+      kind: 'op',
+      // When wage caps and/or SSTB phase-out actually trim the QBI side
+      // before it merges into QBI deduction, show the post-cap value
+      // here at the source rather than as a downstream "after caps" note.
+      subtitle: reductionFromCaps > 0 ? `→ ${formatCurrency(businessComponents)} after caps` : undefined,
+    },
     { id: 'reit_ptp_comp', x: 330 + SHIFT, y: level2Y, w: BW, h: BH, label: '20% × REIT/PTP', value: reitPtpComponent, formLine: 'L9', kind: 'op' },
     { id: 'income_limit', x: 570 + SHIFT, y: level2Y, w: BW, h: BH, label: 'Income limit', value: incomeLimit, formLine: 'L14', kind: 'op', binds: incomeLimitBinds },
     // Level 3 — sum into QBI deduction
@@ -370,13 +384,12 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
       x: 210 + SHIFT,
       y: level3Y,
       w: BW,
-      h: reductionFromCaps > 0 ? 68 : BH,
+      h: BH,
       label: 'QBI deduction',
       value: qbidAmount,
       formLine: 'L10',
       kind: 'op',
       binds: qbiDeductionBinds,
-      subtitle: reductionFromCaps > 0 ? `after −${formatCurrency(reductionFromCaps)} wage / SSTB caps` : undefined,
     },
     // Level 4 — final min
     { id: 'final_qbid', x: 390 + SHIFT, y: level4Y, w: 180, h: 60, label: 'Final QBID', value: finalQbid, formLine: 'L15', kind: 'final' },
