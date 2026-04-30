@@ -241,10 +241,17 @@ interface DiagramBox {
   subtitle?: string | string[]; // small line(s) below the value
 }
 
+type BoxSide = 'top' | 'right' | 'bottom' | 'left';
+
 interface DiagramEdge {
   from: string;
   to: string;
   op?: string; // optional inline label, e.g. "×0.20", "−", "MIN"
+  // Anchor sides default to bottom (exit) → top (enter) for top-down
+  // flow. Override when an edge crosses zones and the standard anchors
+  // would push the line through unrelated boxes.
+  exitSide?: BoxSide;
+  enterSide?: BoxSide;
 }
 
 function BoxLineDiagram({
@@ -445,9 +452,11 @@ function BoxLineDiagram({
     // buckets on the RIGHT. The income-limit chain mirrors the wage-cap
     // chain that lives further left, so both QBID limitations sit on the
     // same side of the diagram.
-    // Income zone (far left)
-    { id: 'ti', x: INCOME_X, y: level0Y, w: BW, h: BH, label: 'Taxable income', value: tiBefore, formLine: 'L11', kind: 'input' },
-    { id: 'cap_gain', x: INCOME_X + BW + WAGE_HGAP, y: level0Y, w: BW, h: BH, label: 'Net capital gain', value: netCapGain, formLine: 'L12', kind: 'input' },
+    // Income zone (far left). cap_gain sits on the OUTER edge and TI on
+    // the INNER edge so TI is closest to the wage / phase-in zone — the
+    // TI → Phase-in rate edge can hop directly across the zone gap.
+    { id: 'cap_gain', x: INCOME_X, y: level0Y, w: BW, h: BH, label: 'Net capital gain', value: netCapGain, formLine: 'L12', kind: 'input' },
+    { id: 'ti', x: INCOME_X + BW + WAGE_HGAP, y: level0Y, w: BW, h: BH, label: 'Taxable income', value: tiBefore, formLine: 'L11', kind: 'input' },
     // QBI zone (right)
     { id: 'non_sstb', x: 10 + SHIFT, y: level0Y, w: BW, h: BH, label: 'Non-SSTB QBI', value: nonSstb, formLine: 'L2', kind: 'input' },
     { id: 'sstb', x: 170 + SHIFT, y: level0Y, w: BW, h: BH, label: 'SSTB QBI', value: sstb, formLine: 'L2 (SSTB)', kind: 'input' },
@@ -525,7 +534,7 @@ function BoxLineDiagram({
       });
     });
   };
-  addFeederColumn(capGainFeeders, INCOME_X + BW + WAGE_HGAP);
+  addFeederColumn(capGainFeeders, INCOME_X);
   addFeederColumn(nonSstbFeeders, 10 + SHIFT);
   addFeederColumn(sstbFeeders, 170 + SHIFT);
   // Wage cap inputs sit in fixed grid positions: col 0 = wages, col 1
@@ -737,10 +746,15 @@ function BoxLineDiagram({
           ...(wageCapActuallyBinds && inPhaseIn
             ? [
                 // TI is the basis for the phase-in rate ((TI − threshold)
-                // / phase-in length). Now that TI sits on the left side
-                // of the diagram, the dependency is a real edge instead
-                // of a subtitle annotation.
-                { from: 'ti', to: 'phase_in_rate' } as DiagramEdge,
+                // / phase-in length). Route the edge from TI's right side
+                // into Phase-in rate's left side so it crosses the zone
+                // gap directly without grazing other boxes.
+                {
+                  from: 'ti',
+                  to: 'phase_in_rate',
+                  exitSide: 'right',
+                  enterSide: 'left',
+                } as DiagramEdge,
                 // Both operands of the L5 − wage_cap subtraction feed
                 // the Excess box. L5 is the minuend (no op label),
                 // wage_cap is the subtrahend (op '−').
@@ -754,6 +768,8 @@ function BoxLineDiagram({
                   from: 'phase_in_rate',
                   to: 'qbi_comp_after',
                   op: `−${formatCurrency(Math.max(0, qbiComponentMax - businessComponents))}`,
+                  exitSide: 'right',
+                  enterSide: 'left',
                 } as DiagramEdge,
               ]
             : wageCapActuallyBinds
@@ -787,9 +803,25 @@ function BoxLineDiagram({
 
   const boxById = (id: string) => boxes.find((b) => b.id === id)!;
 
-  // Anchor points on a box
-  const bottom = (b: DiagramBox) => ({ x: b.x + b.w / 2, y: b.y + b.h });
-  const top = (b: DiagramBox) => ({ x: b.x + b.w / 2, y: b.y });
+  // Anchor a point on a given side of a box, and produce a control-point
+  // offset that points OUTWARD from that side (used both for the bezier
+  // tangent and for the marker pull-back at the line end).
+  const anchorOn = (b: DiagramBox, side: BoxSide) => {
+    switch (side) {
+      case 'top': return { x: b.x + b.w / 2, y: b.y };
+      case 'bottom': return { x: b.x + b.w / 2, y: b.y + b.h };
+      case 'left': return { x: b.x, y: b.y + b.h / 2 };
+      case 'right': return { x: b.x + b.w, y: b.y + b.h / 2 };
+    }
+  };
+  const outward = (side: BoxSide, mag: number) => {
+    switch (side) {
+      case 'top': return { x: 0, y: -mag };
+      case 'bottom': return { x: 0, y: mag };
+      case 'left': return { x: -mag, y: 0 };
+      case 'right': return { x: mag, y: 0 };
+    }
+  };
 
   // Tighten the viewBox to the actual content extent so the diagram
   // is centered horizontally within whatever container width Tailwind
@@ -817,12 +849,23 @@ function BoxLineDiagram({
         {edges.map((e, i) => {
           const from = boxById(e.from);
           const to = boxById(e.to);
-          const a = bottom(from);
-          const b = top(to);
-          // Smooth cubic curve for vertical-ish flow
-          const dy = b.y - a.y;
-          const cp1 = { x: a.x, y: a.y + dy * 0.5 };
-          const cp2 = { x: b.x, y: b.y - dy * 0.5 };
+          const exitSide: BoxSide = e.exitSide ?? 'bottom';
+          const enterSide: BoxSide = e.enterSide ?? 'top';
+          const a = anchorOn(from, exitSide);
+          const b = anchorOn(to, enterSide);
+          // Tangent magnitude scales with edge length so short edges get
+          // gentle curves and long ones get pronounced ones. Floor at 40
+          // so even tiny edges have a visible bend off the box face.
+          const dist = Math.hypot(b.x - a.x, b.y - a.y);
+          const mag = Math.max(40, dist * 0.4);
+          const o1 = outward(exitSide, mag);
+          const o2 = outward(enterSide, mag);
+          const cp1 = { x: a.x + o1.x, y: a.y + o1.y };
+          const cp2 = { x: b.x + o2.x, y: b.y + o2.y };
+          // Pull the line endpoint back from the box edge by 6px in the
+          // outward direction so the arrow marker sits flush.
+          const pullBack = outward(enterSide, 6);
+          const lineEnd = { x: b.x + pullBack.x, y: b.y + pullBack.y };
           const isFinalEdge = e.to === 'final_qbid';
           const isConstraint = e.from === 'wage_cap' || e.from === 'phase_in_rate';
           const stroke = isFinalEdge ? '#319795' : isConstraint ? '#D97706' : '#9CA3AF';
@@ -831,7 +874,7 @@ function BoxLineDiagram({
           return (
             <g key={i}>
               <path
-                d={`M ${a.x} ${a.y} C ${cp1.x} ${cp1.y}, ${cp2.x} ${cp2.y}, ${b.x} ${b.y - 6}`}
+                d={`M ${a.x} ${a.y} C ${cp1.x} ${cp1.y}, ${cp2.x} ${cp2.y}, ${lineEnd.x} ${lineEnd.y}`}
                 stroke={stroke}
                 strokeWidth={isFinalEdge ? 2 : 1.5}
                 strokeDasharray={isConstraint ? '5 4' : undefined}
