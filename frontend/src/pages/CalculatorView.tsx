@@ -235,6 +235,7 @@ interface DiagramBox {
   formLine?: string;
   kind: 'input' | 'op' | 'final';
   binds?: boolean;
+  subtitle?: string; // small line below the value, e.g. "after −$3,200 caps"
 }
 
 interface DiagramEdge {
@@ -257,6 +258,9 @@ function BoxLineDiagram({ outputs }: { outputs: Outputs }) {
   const tiLessCapGain = Math.max(0, tiBefore - netCapGain);
   const incomeLimit = 0.20 * tiLessCapGain;
   const finalQbid = Math.min(qbidAmount, incomeLimit);
+  const reitPtpComponentValue = reitPtpComponent;
+  const businessComponents = Math.max(0, qbidAmount - reitPtpComponentValue);
+  const reductionFromCaps = Math.max(0, qbiComponentMax - businessComponents);
   const qbiDeductionBinds = qbidAmount <= incomeLimit;
 
   // Layout grid (top-down, 5 levels)
@@ -280,7 +284,19 @@ function BoxLineDiagram({ outputs }: { outputs: Outputs }) {
     { id: 'reit_ptp_comp', x: 330, y: 250, w: BW, h: BH, label: '20% × REIT/PTP', value: reitPtpComponent, formLine: 'L9', kind: 'op' },
     { id: 'income_limit', x: 570, y: 250, w: BW, h: BH, label: 'Income limit', value: incomeLimit, formLine: 'L14', kind: 'op', binds: !qbiDeductionBinds },
     // Level 3 — sum into QBI deduction
-    { id: 'qbi_deduction', x: 210, y: 380, w: BW, h: BH, label: 'QBI deduction', value: qbidAmount, formLine: 'L10', kind: 'op', binds: qbiDeductionBinds },
+    {
+      id: 'qbi_deduction',
+      x: 210,
+      y: 380,
+      w: BW,
+      h: reductionFromCaps > 0 ? 68 : BH,
+      label: 'QBI deduction',
+      value: qbidAmount,
+      formLine: 'L10',
+      kind: 'op',
+      binds: qbiDeductionBinds,
+      subtitle: reductionFromCaps > 0 ? `after −${formatCurrency(reductionFromCaps)} wage / SSTB caps` : undefined,
+    },
     // Level 4 — final min
     { id: 'final_qbid', x: 390, y: 510, w: 180, h: 60, label: 'Final QBID', value: finalQbid, formLine: 'L15', kind: 'final' },
   ];
@@ -295,9 +311,9 @@ function BoxLineDiagram({ outputs }: { outputs: Outputs }) {
     { from: 'total_qbi', to: 'qbi_comp_max', op: '×0.20' },
     { from: 'reit_ptp', to: 'reit_ptp_comp', op: '×0.20' },
     { from: 'ti_less_cg', to: 'income_limit', op: '×0.20' },
-    // QBI components → QBI deduction (with cap reduction implicit)
-    { from: 'qbi_comp_max', to: 'qbi_deduction', op: '− caps' },
-    { from: 'reit_ptp_comp', to: 'qbi_deduction', op: '+' },
+    // QBI components → QBI deduction (sum implied by the merge)
+    { from: 'qbi_comp_max', to: 'qbi_deduction' },
+    { from: 'reit_ptp_comp', to: 'qbi_deduction', op: 'Σ' },
     // Final min
     { from: 'qbi_deduction', to: 'final_qbid' },
     { from: 'income_limit', to: 'final_qbid', op: 'MIN' },
@@ -386,6 +402,11 @@ function BoxLineDiagram({ outputs }: { outputs: Outputs }) {
               {b.value !== undefined && (
                 <text x={b.x + b.w / 2} y={b.y + 36} textAnchor="middle" fontSize="13" fontWeight={600} fill={valueColor} fontFamily="ui-monospace, monospace">
                   {formatCurrency(b.value)}
+                </text>
+              )}
+              {b.subtitle && (
+                <text x={b.x + b.w / 2} y={b.y + 52} textAnchor="middle" fontSize="9" fill="#9CA3AF">
+                  {b.subtitle}
                 </text>
               )}
               {b.binds && b.kind !== 'final' && (
