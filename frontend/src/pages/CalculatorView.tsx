@@ -334,12 +334,12 @@ function BoxLineDiagram({
     row: 0 | 1;
     alwaysShow?: boolean;
   };
-  const wageCapInputs: WageInput[] = [
-    { name: 'w2_wages_from_qualified_business', label: 'W-2 wages', col: 0, row: 0, alwaysShow: true },
-    { name: 'unadjusted_basis_qualified_property', label: 'UBIA', col: 1, row: 0 },
-    { name: 'sstb_w2_wages_from_qualified_business', label: 'SSTB W-2', col: 0, row: 1 },
-    { name: 'sstb_unadjusted_basis_qualified_property', label: 'SSTB UBIA', col: 1, row: 1 },
-  ]
+  const wageCapInputs: WageInput[] = ([
+    { name: 'w2_wages_from_qualified_business', label: 'W-2 wages', col: 0 as const, row: 0 as const, alwaysShow: true },
+    { name: 'unadjusted_basis_qualified_property', label: 'UBIA', col: 1 as const, row: 0 as const },
+    { name: 'sstb_w2_wages_from_qualified_business', label: 'SSTB W-2', col: 0 as const, row: 1 as const },
+    { name: 'sstb_unadjusted_basis_qualified_property', label: 'SSTB UBIA', col: 1 as const, row: 1 as const },
+  ] as Omit<WageInput, 'value'>[])
     .map((f) => ({ ...f, value: inputVal(f.name) }))
     .filter((f) => f.alwaysShow || f.value > 0);
   // Wage cap is a COMPUTED value, not a raw input — so when the result
