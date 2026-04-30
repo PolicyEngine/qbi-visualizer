@@ -629,13 +629,19 @@ function BoxLineDiagram({
             .filter((f) => f.name.startsWith('sstb_'))
             .map((f) => ({ from: `feeder_${f.name}`, to: 'wage_cap' } as DiagramEdge)),
           // Route the dashed cap path through the Phase-in box when the
-          // filer is in the §199A(b)(3)(B) phase-in range. This makes
-          // the chain visually explicit: Wage cap → Phase-in % →
-          // L5 (post-cap value).
+          // filer is in the §199A(b)(3)(B) phase-in range. The label on
+          // the edge into L5 shows the actual reduction amount —
+          // rate × (qbid_max − cap) — so users can verify
+          // L5_value − reduction = post-cap value directly. (\"caps × rate\"
+          // was misleading because it suggested cap × rate.)
           ...(wageCapActuallyBinds && inPhaseIn
             ? [
                 { from: 'wage_cap', to: 'phase_in_rate' } as DiagramEdge,
-                { from: 'phase_in_rate', to: 'qbi_comp_max', op: 'caps × rate' } as DiagramEdge,
+                {
+                  from: 'phase_in_rate',
+                  to: 'qbi_comp_max',
+                  op: `−${formatCurrency(Math.max(0, qbiComponentMax - businessComponents))}`,
+                } as DiagramEdge,
               ]
             : wageCapActuallyBinds
             ? [{ from: 'wage_cap', to: 'qbi_comp_max', op: 'caps' } as DiagramEdge]
