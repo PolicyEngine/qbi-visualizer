@@ -263,13 +263,6 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
   const reductionFromCaps = Math.max(0, qbiComponentMax - businessComponents);
   // Treat sub-dollar deltas as floating-point noise rather than a real cap.
   const meaningfulReduction = reductionFromCaps >= 1;
-  // The wage cap is "actually contributing" when the reduction is larger
-  // than what SSTB phase-out alone could explain (max possible SSTB
-  // reduction is 20% × SSTB QBI, when applicable_rate hits 0). Below
-  // threshold this is always false, so the dashed cap edge stays hidden.
-  const sstbMaxPossibleReduction = 0.20 * Math.max(0, sstb);
-  const wageCapActuallyBinds =
-    showWageCap && wageCap < qbiComponentMax && reductionFromCaps > sstbMaxPossibleReduction + 1;
   // Don't mark anything as binding when both candidates are zero (stale state).
   const hasOutputs = qbidAmount > 0 || incomeLimit > 0;
   const qbiDeductionBinds = hasOutputs && qbidAmount <= incomeLimit;
@@ -329,6 +322,13 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
   const ubiaVal = inputVal('unadjusted_basis_qualified_property');
   const wageCap = Math.max(0.50 * w2, 0.25 * w2 + 0.025 * ubiaVal);
   const showWageCap = wageCapInputs.length > 0;
+  // The wage cap is "actually contributing" when the reduction is larger
+  // than what SSTB phase-out alone could explain (max SSTB reduction =
+  // 20% × SSTB QBI when applicable_rate hits 0). Below threshold this
+  // is always false, so the dashed cap edge stays hidden.
+  const sstbMaxPossibleReduction = 0.20 * Math.max(0, sstb);
+  const wageCapActuallyBinds =
+    showWageCap && wageCap < qbiComponentMax && reductionFromCaps > sstbMaxPossibleReduction + 1;
 
   // Vertical space the feeder area needs (max stack height across columns).
   // Box height needs to clear both the label (y=18 baseline) and the value
