@@ -320,15 +320,25 @@ function BoxLineDiagram({
   const sstbFeeders = feedersFor('sstb');
   const capGainFeeders = feedersFor('cap_gain');
 
-  // Wage / UBIA cap area (§199A(b)(2)(B)). Only W-2 wages renders by
-  // default (so the cap path is always visible) — UBIA and the SSTB-
-  // allocable variants only render when their input is non-zero.
-  type WageInput = { name: string; label: string; value: number; alwaysShow?: boolean };
+  // Wage / UBIA cap area (§199A(b)(2)(B)). Each input has a FIXED grid
+  // position (col 0 = wages, col 1 = property; row 0 = total, row 1 =
+  // SSTB allocable) so users see consistent placement across edits.
+  // Only W-2 wages renders by default; the others appear when non-zero.
+  // If the right column has no entries, the grid collapses to one
+  // column to avoid an empty half.
+  type WageInput = {
+    name: string;
+    label: string;
+    value: number;
+    col: 0 | 1;
+    row: 0 | 1;
+    alwaysShow?: boolean;
+  };
   const wageCapInputs: WageInput[] = [
-    { name: 'w2_wages_from_qualified_business', label: 'W-2 wages', alwaysShow: true },
-    { name: 'unadjusted_basis_qualified_property', label: 'UBIA' },
-    { name: 'sstb_w2_wages_from_qualified_business', label: 'SSTB W-2' },
-    { name: 'sstb_unadjusted_basis_qualified_property', label: 'SSTB UBIA' },
+    { name: 'w2_wages_from_qualified_business', label: 'W-2 wages', col: 0, row: 0, alwaysShow: true },
+    { name: 'unadjusted_basis_qualified_property', label: 'UBIA', col: 1, row: 0 },
+    { name: 'sstb_w2_wages_from_qualified_business', label: 'SSTB W-2', col: 0, row: 1 },
+    { name: 'sstb_unadjusted_basis_qualified_property', label: 'SSTB UBIA', col: 1, row: 1 },
   ]
     .map((f) => ({ ...f, value: inputVal(f.name) }))
     .filter((f) => f.alwaysShow || f.value > 0);
@@ -372,8 +382,12 @@ function BoxLineDiagram({
   // see them as separate parameters feeding one formula, not a stacked
   // chain. With 1 input it's 1 box wide; with 2-4 it's 2 boxes wide.
   const WAGE_HGAP = 10;
-  const wageCols = Math.min(Math.max(wageCapInputs.length, 1), 2);
-  const wageRows = Math.max(1, Math.ceil(wageCapInputs.length / 2));
+  // Determine which columns / rows are actually populated so the grid
+  // collapses cleanly when only one side has entries.
+  const wageCol1Active = wageCapInputs.some((f) => f.col === 1);
+  const wageRow1Active = wageCapInputs.some((f) => f.row === 1);
+  const wageCols = wageCol1Active ? 2 : 1;
+  const wageRows = wageRow1Active ? 2 : 1;
   const wageGridWidth = wageCols * BW + (wageCols - 1) * WAGE_HGAP;
 
   const maxFeederStack = Math.max(
@@ -463,18 +477,16 @@ function BoxLineDiagram({
   addFeederColumn(nonSstbFeeders, 10 + SHIFT);
   addFeederColumn(sstbFeeders, 170 + SHIFT);
   addFeederColumn(capGainFeeders, 650 + SHIFT);
-  // Wage cap inputs lay out in a horizontal 2-col grid (W-2 next to UBIA,
-  // SSTB W-2 next to SSTB UBIA below) so it's visually clear they're
-  // separate parameters of one formula, not a vertical chain.
+  // Wage cap inputs sit in fixed grid positions: col 0 = wages, col 1
+  // = property; row 0 = total, row 1 = SSTB allocable. Each input
+  // always lands in its own slot regardless of which others are entered.
   if (showWageCap) {
     const offsetRows = maxFeederStack - wageRows;
-    wageCapInputs.forEach((f, i) => {
-      const col = i % 2;
-      const row = Math.floor(i / 2);
+    wageCapInputs.forEach((f) => {
       boxes.push({
         id: `feeder_${f.name}`,
-        x: 10 + col * (BW + WAGE_HGAP),
-        y: 10 + (offsetRows + row) * (FEEDER_BH + FEEDER_GAP),
+        x: 10 + f.col * (BW + WAGE_HGAP),
+        y: 10 + (offsetRows + f.row) * (FEEDER_BH + FEEDER_GAP),
         w: BW,
         h: FEEDER_BH,
         label: f.label,
