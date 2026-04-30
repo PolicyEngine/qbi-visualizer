@@ -235,7 +235,7 @@ interface DiagramBox {
   formLine?: string;
   kind: 'input' | 'op' | 'final';
   binds?: boolean;
-  subtitle?: string; // small line below the value, e.g. "after −$3,200 caps"
+  subtitle?: string | string[]; // small line(s) below the value
 }
 
 interface DiagramEdge {
@@ -286,7 +286,7 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
         .map((f) => ({ ...f, value: inputVal(f.name) }));
     }
     if (target === 'sstb') {
-      return [{ name: 'sstb_self_employment_income', label: 'SSTB self-employment', formLine: 'L1 (SSTB)' }]
+      return [{ name: 'sstb_self_employment_income', label: 'SSTB SE income', formLine: 'L1 (SSTB)' }]
         .filter((f) => inputVal(f.name) > 0 && isQualified(f.name))
         .map((f) => ({ ...f, value: inputVal(f.name) }));
     }
@@ -308,7 +308,7 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
   const wageCapInputs: WageInput[] = [
     { name: 'w2_wages_from_qualified_business', label: 'W-2 wages' },
     { name: 'unadjusted_basis_qualified_property', label: 'UBIA' },
-    { name: 'sstb_w2_wages_from_qualified_business', label: 'SSTB W-2 wages' },
+    { name: 'sstb_w2_wages_from_qualified_business', label: 'SSTB W-2' },
     { name: 'sstb_unadjusted_basis_qualified_property', label: 'SSTB UBIA' },
   ]
     .map((f) => ({ ...f, value: inputVal(f.name) }))
@@ -431,12 +431,12 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
       x: WAGE_CAP_X,
       y: level2Y,
       w: BW,
-      h: 68,
+      h: 84,
       label: 'Wage cap',
       value: wageCap,
       formLine: '(b)(2)(B)',
       kind: 'op',
-      subtitle: 'max(50% W-2, 25% W-2 + 2.5% UBIA)',
+      subtitle: ['max(50% W-2,', '25% W-2 + 2.5% UBIA)'],
     });
   }
 
@@ -485,10 +485,7 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
 
   return (
     <div className="mb-6 bg-white rounded-pe-lg border border-pe-gray-200 p-4">
-      <h3 className="text-sm font-semibold text-pe-text-primary mb-1">Computation graph</h3>
-      <p className="text-xs text-pe-text-tertiary mb-4">
-        Each box is a value; each line is data flow. Operation labels (Σ, −, ×0.20, MIN) sit on the lines.
-      </p>
+      <h3 className="text-sm font-semibold text-pe-text-primary mb-3">Computation graph</h3>
       <svg viewBox={`0 0 ${tightW} ${H}`} className="w-full" preserveAspectRatio="xMidYMid meet">
         <defs>
           <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
@@ -568,11 +565,12 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
                   {formatCurrency(b.value)}
                 </text>
               )}
-              {b.subtitle && (
-                <text x={b.x + b.w / 2} y={b.y + 52} textAnchor="middle" fontSize="9" fill="#9CA3AF">
-                  {b.subtitle}
-                </text>
-              )}
+              {b.subtitle &&
+                (Array.isArray(b.subtitle) ? b.subtitle : [b.subtitle]).map((line, i) => (
+                  <text key={i} x={b.x + b.w / 2} y={b.y + 52 + i * 11} textAnchor="middle" fontSize="9" fill="#9CA3AF">
+                    {line}
+                  </text>
+                ))}
               {b.binds && b.kind !== 'final' && (
                 <text x={b.x + b.w - 4} y={b.y + 11} textAnchor="end" fontSize="8" fill="#319795" fontWeight={700}>★ BINDS</text>
               )}
