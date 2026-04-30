@@ -10,13 +10,6 @@ interface InputDef {
   type: 'currency' | 'bool';
 }
 
-interface OutputDef {
-  name: string;
-  label: string;
-  entity: string;
-  primary?: boolean;
-}
-
 const INPUT_DEFS: InputDef[] = [
   { name: 'self_employment_income', label: 'Self-employment', group: 'QBI Income Sources', default: 0, type: 'currency' },
   { name: 'self_employment_income_would_be_qualified', label: 'Qualified', group: 'QBI Income Sources', default: true, type: 'bool' },
@@ -42,22 +35,6 @@ const INPUT_DEFS: InputDef[] = [
   { name: 'short_term_capital_gains', label: 'Short-term capital gains', group: 'Other Income', default: 0, type: 'currency' },
   { name: 'qualified_dividend_income', label: 'Qualified dividends', group: 'Other Income', default: 0, type: 'currency' },
   { name: 'taxable_interest_income', label: 'Taxable interest', group: 'Other Income', default: 0, type: 'currency' },
-];
-
-const OUTPUT_DEFS: OutputDef[] = [
-  { name: 'qualified_business_income_deduction', label: 'Qualified Business Income Deduction', entity: 'tax_unit', primary: true },
-  { name: 'qualified_business_income', label: 'Non-SSTB qualified business income', entity: 'person' },
-  { name: 'sstb_qualified_business_income', label: 'SSTB qualified business income', entity: 'person' },
-  { name: 'qualified_reit_and_ptp_income', label: 'Qualified REIT dividends and PTP income', entity: 'person' },
-  { name: 'qbid_amount', label: 'Per-person QBID (before TI cap)', entity: 'person' },
-  { name: 'taxable_income_less_qbid', label: 'Taxable income (before QBID)', entity: 'tax_unit' },
-  { name: 'adjusted_net_capital_gain', label: 'Adjusted net capital gain', entity: 'tax_unit' },
-  { name: 'self_employment_tax_ald_person', label: 'SE tax deduction (QBI reduction)', entity: 'person' },
-  { name: 'self_employed_health_insurance_ald_person', label: 'SE health insurance deduction (QBI reduction)', entity: 'person' },
-  { name: 'self_employed_pension_contribution_ald_person', label: 'SE pension deduction (QBI reduction)', entity: 'person' },
-  { name: 'adjusted_gross_income', label: 'Adjusted gross income', entity: 'tax_unit' },
-  { name: 'taxable_income', label: 'Taxable income (after QBID)', entity: 'tax_unit' },
-  { name: 'income_tax_before_credits', label: 'Income tax before credits', entity: 'tax_unit' },
 ];
 
 function getQbiIncomeRows() {
@@ -91,9 +68,6 @@ function getGroups(): GroupDef[] {
 
 const formatCurrency = (val: number) =>
   val.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
-
-const formatCurrencyLarge = (val: number) =>
-  val.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
 const Chevron = ({ open }: { open: boolean }) => (
   <svg
@@ -756,9 +730,16 @@ function BoxLineDiagram({
                   enterSide: 'left',
                 } as DiagramEdge,
                 // Both operands of the L5 − wage_cap subtraction feed
-                // the Excess box. L5 is the minuend (no op label),
-                // wage_cap is the subtrahend (op '−').
-                { from: 'qbi_comp_max', to: 'phase_in_excess' } as DiagramEdge,
+                // the Excess box. L5 (minuend) sits in the QBI zone to
+                // the right, so route its arrow into Excess's right
+                // side rather than its top. wage_cap (subtrahend) is
+                // directly above and uses default top entry with op '−'.
+                {
+                  from: 'qbi_comp_max',
+                  to: 'phase_in_excess',
+                  exitSide: 'left',
+                  enterSide: 'right',
+                } as DiagramEdge,
                 { from: 'wage_cap', to: 'phase_in_excess', op: '−' } as DiagramEdge,
                 { from: 'phase_in_excess', to: 'phase_in_rate', op: '×' } as DiagramEdge,
                 // Phase-in rate × Excess = the reduction landing on the
@@ -1076,7 +1057,6 @@ export default function CalculatorView() {
 
   const qbiIncomeRows = getQbiIncomeRows();
   const otherGroups = getGroups();
-  const primaryOutput = result ? OUTPUT_DEFS.find((o) => o.primary) : null;
 
   const qbiDefs = INPUT_DEFS.filter((d) => d.group === 'QBI Income Sources');
 
@@ -1285,23 +1265,6 @@ export default function CalculatorView() {
                 {isStale && (
                   <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-pe-lg text-sm text-amber-800 flex items-center justify-between gap-4">
                     <span>Inputs changed — click <span className="font-semibold">Calculate</span> to refresh the computed values.</span>
-                  </div>
-                )}
-
-                {/* Primary result */}
-                {primaryOutput && (
-                  <div className={`mb-8 bg-white rounded-2xl border border-pe-gray-200 p-8 text-center shadow-sm ${isStale ? 'opacity-60' : ''}`}>
-                    <div className="text-sm text-pe-text-secondary mb-2">{primaryOutput.label}</div>
-                    <div className={`text-5xl font-bold ${isStale ? 'text-pe-gray-300' : 'text-pe-teal-500'}`}>
-                      {isStale
-                        ? '—'
-                        : typeof result!.outputs[primaryOutput.name] === 'number'
-                        ? formatCurrencyLarge(result!.outputs[primaryOutput.name] as number)
-                        : '$0'}
-                    </div>
-                    <div className="mt-3 text-sm text-pe-text-tertiary">
-                      {(result?.filing_status ?? inputs.filing_status).replace(/_/g, ' ').toLowerCase()} &middot; Tax year {result?.year ?? inputs.year}
-                    </div>
                   </div>
                 )}
 
