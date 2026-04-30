@@ -234,6 +234,7 @@ interface DiagramBox {
   h: number;
   label: string;
   value?: number;
+  valueFormat?: 'currency' | 'percent';
   formLine?: string;
   kind: 'input' | 'op' | 'final';
   binds?: boolean;
@@ -516,41 +517,87 @@ function BoxLineDiagram({
   // value. It connects to L10 with a dashed "caps" edge — the cap only
   // actually binds above the threshold, but surfacing it always lets
   // users see how their W-2 / UBIA inputs relate to the deduction.
+  const wageOnly = 0.50 * w2;
+  const wageUbia = 0.25 * w2 + 0.025 * ubiaVal;
+  const wageOnlyWins = wageOnly >= wageUbia;
   if (showWageCap) {
-    const wageOnly = 0.50 * w2;
-    const wageUbia = 0.25 * w2 + 0.025 * ubiaVal;
-    const wageOnlyWins = wageOnly >= wageUbia;
-    const altLabel = (label: string, val: number, wins: boolean): string =>
-      `${wins ? '★ ' : '  '}${label} = ${formatCurrency(val)}`;
-    const subtitleLines = [
-      altLabel('50% W-2', wageOnly, wageOnlyWins),
-      altLabel('25% W-2 + 2.5% UBIA', wageUbia, !wageOnlyWins),
-    ];
-    // Phase-in status — derived from TI vs threshold via parameters.
-    if (reductionRate === undefined) {
-      // No threshold info available — fall back to old detection
-      if (!wageCapActuallyBinds) subtitleLines.push('(not binding here)');
-    } else if (reductionRate === 0) {
-      subtitleLines.push('(suspended below threshold)');
-    } else if (inPhaseIn) {
-      subtitleLines.push(`Phase-in ${(reductionRate * 100).toFixed(1)}%`);
-    } else if (aboveRange && wageCap < qbiComponentMax) {
-      subtitleLines.push('(above range — full cap)');
-    } else if (wageCap >= qbiComponentMax) {
-      subtitleLines.push('(not binding here)');
-    }
+    // Form 8995-A Part II breaks the wage cap into two explicit alternatives
+    // — Line 13 (50% × W-2) and Line 16 (25% × W-2 + 2.5% × UBIA). Render
+    // them as their own boxes so users see the comparison upstream of the
+    // max(). A small "max" annotation sits on the merge.
+    const wageCapStatusLine: string | undefined = (() => {
+      if (reductionRate === undefined) {
+        return wageCapActuallyBinds ? undefined : '(not binding here)';
+      }
+      if (reductionRate === 0) return '(suspended below threshold)';
+      if (inPhaseIn) return undefined; // shown in dedicated phase-in box
+      if (aboveRange && wageCap < qbiComponentMax) return '(above range — full cap)';
+      if (wageCap >= qbiComponentMax) return '(not binding here)';
+      return undefined;
+    })();
+
+    // Two alternative boxes positioned at level1Y (between feeders above
+    // and the Wage cap node at level2Y).
+    boxes.push({
+      id: 'wage_alt_50',
+      x: 10,
+      y: level1Y,
+      w: BW,
+      h: BH,
+      label: '50% × W-2',
+      value: wageOnly,
+      formLine: '8995-A L13',
+      kind: 'op',
+      binds: wageOnlyWins && wageCap > 0,
+    });
+    boxes.push({
+      id: 'wage_alt_25_ubia',
+      x: 10 + BW + WAGE_HGAP,
+      y: level1Y,
+      w: BW,
+      h: BH,
+      label: '25% W-2 + 2.5% UBIA',
+      value: wageUbia,
+      formLine: '8995-A L16',
+      kind: 'op',
+      binds: !wageOnlyWins && wageCap > 0,
+    });
+
     boxes.push({
       id: 'wage_cap',
       x: WAGE_CAP_X,
       y: level2Y,
       w: BW,
-      h: 52 + subtitleLines.length * 12 + 8,
+      h: wageCapStatusLine ? 64 : BH,
       label: 'Wage cap',
       value: wageCap,
       formLine: '(b)(2)(B)',
       kind: 'op',
-      subtitle: subtitleLines,
+      subtitle: wageCapStatusLine ? [wageCapStatusLine] : undefined,
     });
+
+    // Phase-in rate box — Form 8995-A Part III Line 23. Sits between
+    // the Wage cap and the dashed "caps" edge, surfacing the percentage
+    // and the underlying TI / threshold range.
+    if (inPhaseIn && reductionRate !== undefined) {
+      const wageCapH = wageCapStatusLine ? 64 : BH;
+      boxes.push({
+        id: 'phase_in_rate',
+        x: WAGE_CAP_X,
+        y: level2Y + wageCapH + 24,
+        w: BW,
+        h: 80,
+        label: 'Phase-in',
+        value: reductionRate * 100,
+        valueFormat: 'percent',
+        formLine: '8995-A L23',
+        kind: 'op',
+        subtitle: [
+          `TI ${formatCurrency(tiBefore)}`,
+          `of ${formatCurrency(threshold!)}–${formatCurrency(threshold! + phaseInLength!)}`,
+        ],
+      });
+    }
   }
 
   const edges: DiagramEdge[] = [
@@ -560,14 +607,22 @@ function BoxLineDiagram({
     ...nonSstbFeeders.map((f, i) => ({ from: `feeder_${f.name}`, to: 'non_sstb', op: i > 0 ? 'Σ' : undefined })),
     ...sstbFeeders.map((f) => ({ from: `feeder_${f.name}`, to: 'sstb' })),
     ...capGainFeeders.map((f, i) => ({ from: `feeder_${f.name}`, to: 'cap_gain', op: i > 0 ? 'Σ' : undefined })),
-    // Wage cap input feeders → Wage cap node. The dashed constraint
-    // edge from Wage cap to the 20% × Total QBI box only renders when
-    // the cap actually reduces the QBI side; below the §199A threshold
-    // the cap exists but doesn't fire, so omitting the edge avoids the
-    // misleading impression that a $500 cap is shrinking $18,587.
+    // Wage cap routing — feeders go through the 50% W-2 and
+    // 25% W-2 + 2.5% UBIA alternative boxes (Form 8995-A L13 / L16)
+    // before merging at Wage cap (max). SSTB-allocable feeders bypass
+    // the alternatives since they only matter for per-bucket caps.
     ...(showWageCap
       ? [
-          ...wageCapInputs.map((f) => ({ from: `feeder_${f.name}`, to: 'wage_cap' })),
+          { from: 'feeder_w2_wages_from_qualified_business', to: 'wage_alt_50' } as DiagramEdge,
+          { from: 'feeder_w2_wages_from_qualified_business', to: 'wage_alt_25_ubia' } as DiagramEdge,
+          ...(inputVal('unadjusted_basis_qualified_property') > 0
+            ? [{ from: 'feeder_unadjusted_basis_qualified_property', to: 'wage_alt_25_ubia' } as DiagramEdge]
+            : []),
+          { from: 'wage_alt_50', to: 'wage_cap' } as DiagramEdge,
+          { from: 'wage_alt_25_ubia', to: 'wage_cap', op: 'max' } as DiagramEdge,
+          ...wageCapInputs
+            .filter((f) => f.name.startsWith('sstb_'))
+            .map((f) => ({ from: `feeder_${f.name}`, to: 'wage_cap' } as DiagramEdge)),
           ...(wageCapActuallyBinds
             ? [{ from: 'wage_cap', to: 'qbi_comp_max', op: 'caps' } as DiagramEdge]
             : []),
@@ -681,7 +736,7 @@ function BoxLineDiagram({
               </text>
               {b.value !== undefined && (
                 <text x={b.x + b.w / 2} y={b.y + 36} textAnchor="middle" fontSize="13" fontWeight={600} fill={valueColor} fontFamily="ui-monospace, monospace">
-                  {formatCurrency(b.value)}
+                  {b.valueFormat === 'percent' ? `${b.value.toFixed(1)}%` : formatCurrency(b.value)}
                 </text>
               )}
               {b.subtitle &&
@@ -697,63 +752,9 @@ function BoxLineDiagram({
           );
         })}
 
-        {/* Phase-in indicator — sits beside the Wage cap box when the
-            filer's TI lands inside the §199A(b)(3)(B) phase-in range.
-            A horizontal progress bar shows where TI sits between
-            threshold and threshold + range, with the rate annotated. */}
-        {(() => {
-          if (!showWageCap || reductionRate === undefined) return null;
-          if (!inPhaseIn) return null;
-          const wageCapBox = boxes.find((b) => b.id === 'wage_cap');
-          if (!wageCapBox) return null;
-          const labelX = wageCapBox.x + wageCapBox.w / 2;
-          const barX = wageCapBox.x + 8;
-          const barY = wageCapBox.y + wageCapBox.h + 16;
-          const barW = wageCapBox.w - 16;
-          return (
-            <g>
-              <text x={labelX} y={barY - 4} textAnchor="middle" fontSize="9" fill="#6B7280">
-                §199A(b)(3)(B) phase-in
-              </text>
-              <rect x={barX} y={barY} width={barW} height={6} rx={3} fill="#F2F4F7" />
-              <rect
-                x={barX}
-                y={barY}
-                width={Math.max(2, barW * reductionRate)}
-                height={6}
-                rx={3}
-                fill="#D97706"
-                opacity={0.7}
-              />
-              {/* Threshold + range tick labels under the bar */}
-              <text x={barX} y={barY + 18} textAnchor="start" fontSize="8" fill="#9CA3AF">
-                ${formatThousandsK(threshold!)}
-              </text>
-              <text x={barX + barW} y={barY + 18} textAnchor="end" fontSize="8" fill="#9CA3AF">
-                ${formatThousandsK(threshold! + phaseInLength!)}
-              </text>
-              <text
-                x={labelX}
-                y={barY + 32}
-                textAnchor="middle"
-                fontSize="10"
-                fontFamily="ui-monospace, monospace"
-                fill="#D97706"
-              >
-                {(reductionRate * 100).toFixed(1)}% (TI ${formatThousandsK(tiBefore)})
-              </text>
-            </g>
-          );
-        })()}
       </svg>
     </div>
   );
-}
-
-function formatThousandsK(val: number): string {
-  if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(1)}M`;
-  if (val >= 1_000) return `${Math.round(val / 1_000)}k`;
-  return `${Math.round(val)}`;
 }
 
 function BreakdownStaged({ outputs }: { outputs: Outputs }) {
