@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import CalculatorView from './pages/CalculatorView'
 import LawView from './pages/LawView'
 import TaxFormView from './pages/TaxFormView'
@@ -6,14 +6,28 @@ import './App.css'
 
 type MainView = 'calculator' | 'law' | 'forms'
 
+// Law structure and Tax forms are reachable only via URL hash
+// (#/law, #/forms) — the calculator is the default and the only
+// view advertised in the header tab strip.
+const viewFromHash = (): MainView => {
+  const h = window.location.hash.replace(/^#\/?/, '');
+  if (h === 'law') return 'law';
+  if (h === 'forms') return 'forms';
+  return 'calculator';
+};
+
 function App() {
-  const [mainView, setMainView] = useState<MainView>('calculator')
+  const [mainView, setMainView] = useState<MainView>(viewFromHash);
+
+  useEffect(() => {
+    const onHashChange = () => setMainView(viewFromHash());
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
 
   const tabs: { id: MainView; label: string }[] = [
     { id: 'calculator', label: 'QBID calculator' },
-    { id: 'law', label: 'Law structure' },
-    { id: 'forms', label: 'Tax forms' },
-  ]
+  ];
 
   return (
     <div className="App flex flex-col h-screen bg-pe-bg-primary">
