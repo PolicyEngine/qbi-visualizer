@@ -586,12 +586,14 @@ function BoxLineDiagram({
     // and the underlying TI / threshold range.
     if (inPhaseIn && reductionRate !== undefined) {
       const wageCapH = wageCapStatusLine ? 64 : BH;
+      const gap = Math.max(0, qbiComponentMax - wageCap);
+      const reductionAmount = Math.max(0, qbiComponentMax - businessComponents);
       boxes.push({
         id: 'phase_in_rate',
         x: WAGE_CAP_X,
         y: level2Y + wageCapH + 24,
         w: BW,
-        h: 80,
+        h: 116,
         label: 'Phase-in',
         value: reductionRate * 100,
         valueFormat: 'percent',
@@ -600,6 +602,8 @@ function BoxLineDiagram({
         subtitle: [
           `TI ${formatCurrency(tiBefore)}`,
           `of ${formatCurrency(threshold!)}–${formatCurrency(threshold! + phaseInLength!)}`,
+          `× gap ${formatCurrency(gap)}`,
+          `= −${formatCurrency(reductionAmount)} reduction`,
         ],
       });
     }
