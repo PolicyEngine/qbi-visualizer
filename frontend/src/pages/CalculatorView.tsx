@@ -684,7 +684,7 @@ export default function CalculatorView() {
   const [error, setError] = useState<string | null>(null);
   const [openSections, setOpenSections] = useState<Set<string>>(new Set(['QBI Income Sources']));
   const [parametersOpen, setParametersOpen] = useState(false);
-  const [resultTab, setResultTab] = useState<'breakdown' | 'diagram'>('breakdown');
+  const [resultTab, setResultTab] = useState<'breakdown' | 'diagram'>('diagram');
   // Track whether the user has ever clicked Calculate. Lets us keep the
   // result-panel structure visible after the first calc, even when the
   // user edits inputs and the computed values get cleared.
