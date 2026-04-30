@@ -353,12 +353,15 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
   ];
 
   // Add feeder boxes (non-zero raw inputs) above their target QBI bucket.
+  // Bottom-align: single feeders sit just above the target rather than
+  // floating at the top of the feeder area.
   const addFeederColumn = (feeders: Feeder[], targetX: number) => {
+    const offset = maxFeederStack - feeders.length; // empty rows above
     feeders.forEach((f, i) => {
       boxes.push({
         id: `feeder_${f.name}`,
         x: targetX,
-        y: 10 + i * (FEEDER_BH + FEEDER_GAP),
+        y: 10 + (offset + i) * (FEEDER_BH + FEEDER_GAP),
         w: BW,
         h: FEEDER_BH,
         label: f.label,
@@ -372,14 +375,27 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
   addFeederColumn(sstbFeeders, 170);
   addFeederColumn(capGainFeeders, 650);
 
+  // Tag the Non-SSTB QBI box with the SE-tax / health / retirement
+  // allocation reduction (when gross > net) so the shrinkage is visible
+  // without overloading individual feeder edges.
+  const grossNonSstb = nonSstbFeeders.reduce((s, f) => s + f.value, 0);
+  if (grossNonSstb > nonSstb && nonSstb > 0) {
+    const nonSstbBox = boxes.find((b) => b.id === 'non_sstb')!;
+    nonSstbBox.subtitle = `after −${formatCurrency(grossNonSstb - nonSstb)} SE-tax / health / retirement allocation`;
+    nonSstbBox.h = 68;
+  }
+  const grossSstb = sstbFeeders.reduce((s, f) => s + f.value, 0);
+  if (grossSstb > sstb && sstb > 0) {
+    const sstbBox = boxes.find((b) => b.id === 'sstb')!;
+    sstbBox.subtitle = `after −${formatCurrency(grossSstb - sstb)} SE-tax / health / retirement allocation`;
+    sstbBox.h = 68;
+  }
+
   const edges: DiagramEdge[] = [
-    // Feeders → QBI buckets (only present when raw inputs are non-zero)
-    ...nonSstbFeeders.map((f, i) => ({
-      from: `feeder_${f.name}`,
-      to: 'non_sstb',
-      // Show the SE-tax allocation reduction on the last feeder edge
-      op: i === nonSstbFeeders.length - 1 && nonSstb < nonSstbFeeders.reduce((s, x) => s + x.value, 0) ? '− SE alloc.' : undefined,
-    })),
+    // Feeders → QBI buckets. Multi-feeder columns get a Σ on the second-
+    // and-later edges to mark the merge; the SE-tax allocation reduction
+    // shows up as a subtitle on the destination box, not on an edge.
+    ...nonSstbFeeders.map((f, i) => ({ from: `feeder_${f.name}`, to: 'non_sstb', op: i > 0 ? 'Σ' : undefined })),
     ...sstbFeeders.map((f) => ({ from: `feeder_${f.name}`, to: 'sstb' })),
     ...capGainFeeders.map((f, i) => ({ from: `feeder_${f.name}`, to: 'cap_gain', op: i > 0 ? 'Σ' : undefined })),
     // Level 0 → first ops
@@ -459,7 +475,7 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
         {/* Boxes */}
         {boxes.map((b) => {
           const fill = b.kind === 'final' ? '#319795' : b.binds ? '#E6FFFA' : 'white';
-          const stroke = b.kind === 'final' ? '#319795' : b.binds ? '#319795' : '#E2E8F0';
+          const stroke = b.kind === 'final' ? '#319795' : b.binds ? '#319795' : '#CBD5E1';
           const labelColor = b.kind === 'final' ? '#FFFFFF' : '#000000';
           const valueColor = b.kind === 'final' ? '#FFFFFF' : b.binds ? '#319795' : '#000000';
           const subColor = b.kind === 'final' ? '#B2F5EA' : '#9CA3AF';
