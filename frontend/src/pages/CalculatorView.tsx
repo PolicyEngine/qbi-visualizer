@@ -1298,9 +1298,25 @@ export default function CalculatorView() {
           <button
             onClick={handleCalculate}
             disabled={loading}
-            className="w-full py-2.5 bg-pe-teal-500 text-white rounded-pe-lg font-medium hover:bg-pe-teal-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="w-full py-2.5 bg-pe-teal-500 text-white rounded-pe-lg font-medium hover:bg-pe-teal-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
           >
-            {loading ? 'Computing...' : 'Calculate QBID'}
+            {loading && (
+              <svg
+                className="w-4 h-4 animate-spin text-white"
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden
+              >
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.25" />
+                <path
+                  d="M22 12a10 10 0 0 1-10 10"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                />
+              </svg>
+            )}
+            {loading ? 'Computing…' : 'Calculate QBID'}
           </button>
         </div>
       </div>
