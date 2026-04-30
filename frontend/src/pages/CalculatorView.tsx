@@ -213,6 +213,9 @@ interface DiagramBox {
   kind: 'input' | 'op' | 'final';
   binds?: boolean;
   subtitle?: string | string[]; // small line(s) below the value
+  // Native SVG hover tooltip for the subtitle — used to spell out
+  // jargon-y abbreviations (e.g. "SE alloc.") without expanding the box.
+  subtitleTooltip?: string;
 }
 
 type BoxSide = 'top' | 'right' | 'bottom' | 'left';
@@ -564,16 +567,23 @@ function BoxLineDiagram({
   // Tag the Non-SSTB QBI box with the SE-tax / health / retirement
   // allocation reduction (when gross > net) so the shrinkage is visible
   // without overloading individual feeder edges.
+  const SE_ALLOC_TOOLTIP =
+    'QBI is reduced by the deductible portion of self-employment tax, ' +
+    'self-employed health insurance, and self-employed retirement ' +
+    'contributions allocable to the qualified trade or business — ' +
+    '§199A(c)(4) and Reg. §1.199A-3(b)(1)(vi).';
   const grossNonSstb = nonSstbFeeders.reduce((s, f) => s + f.value, 0);
   if (grossNonSstb > nonSstb && nonSstb > 0) {
     const nonSstbBox = boxes.find((b) => b.id === 'non_sstb')!;
     nonSstbBox.subtitle = `−${formatCurrency(grossNonSstb - nonSstb)} SE alloc.`;
+    nonSstbBox.subtitleTooltip = SE_ALLOC_TOOLTIP;
     nonSstbBox.h = 68;
   }
   const grossSstb = sstbFeeders.reduce((s, f) => s + f.value, 0);
   if (grossSstb > sstb && sstb > 0) {
     const sstbBox = boxes.find((b) => b.id === 'sstb')!;
     sstbBox.subtitle = `−${formatCurrency(grossSstb - sstb)} SE alloc.`;
+    sstbBox.subtitleTooltip = SE_ALLOC_TOOLTIP;
     sstbBox.h = 68;
   }
 
@@ -962,7 +972,9 @@ function BoxLineDiagram({
                       fontSize="9"
                       fill={isStatus ? '#374151' : '#9CA3AF'}
                       fontWeight={isStatus ? 600 : 400}
+                      style={b.subtitleTooltip ? { cursor: 'help' } : undefined}
                     >
+                      {b.subtitleTooltip && <title>{b.subtitleTooltip}</title>}
                       {line}
                     </text>
                   );
@@ -1301,17 +1313,20 @@ export default function CalculatorView() {
           </div>
         )}
 
-        {(result || hasCalculated) ? (
-          (() => {
-            const isStale = !result;
-            const displayOutputs: Outputs = result?.outputs ?? {};
-            return (
-              <div className="max-w-6xl mx-auto">
-                {isStale && (
-                  <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-pe-lg text-sm text-amber-800 flex items-center justify-between gap-4">
-                    <span>Inputs changed — click <span className="font-semibold">Calculate</span> to refresh the computed values.</span>
-                  </div>
-                )}
+        {(() => {
+          const isStale = !result;
+          const displayOutputs: Outputs = result?.outputs ?? {};
+          return (
+            <div className="max-w-6xl mx-auto">
+              {isStale && (
+                <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-pe-lg text-sm text-amber-800 flex items-center justify-between gap-4">
+                  <span>
+                    {hasCalculated
+                      ? <>Inputs changed — click <span className="font-semibold">Calculate</span> to refresh the computed values.</>
+                      : <>Click <span className="font-semibold">Calculate</span> to populate the diagram with computed values.</>}
+                  </span>
+                </div>
+              )}
 
                 {/* Tabs: numerical breakdown vs computation graph */}
                 <div className="mb-3 flex items-center gap-1 bg-pe-gray-100 p-1 rounded-pe-lg w-fit">
@@ -1380,23 +1395,7 @@ export default function CalculatorView() {
                 )}
               </div>
             );
-          })()
-        ) : (
-          <div className="h-full flex items-center justify-center">
-            <div className="text-center max-w-md">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-pe-teal-50 flex items-center justify-center">
-                <svg className="w-8 h-8 text-pe-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <p className="text-lg font-semibold text-pe-text-primary mb-1">QBID calculator</p>
-              <p className="text-sm text-pe-text-secondary">
-                Enter your income details on the left and click Calculate to see your
-                Qualified Business Income Deduction computed by the PolicyEngine US model.
-              </p>
-            </div>
-          </div>
-        )}
+          })()}
       </div>
     </div>
   );
