@@ -568,17 +568,34 @@ function BoxLineDiagram({
       binds: !wageOnlyWins && wageCap > 0,
     });
 
+    // Status lines longer than ~22 chars overflow at fontSize 9, so split
+    // an em-dash status into two lines and grow the box accordingly.
+    const wageCapStatusLines: string[] | undefined = (() => {
+      if (!wageCapStatusLine) return undefined;
+      if (wageCapStatusLine.length <= 24) return [wageCapStatusLine];
+      const dashIdx = wageCapStatusLine.indexOf(' — ');
+      if (dashIdx < 0) return [wageCapStatusLine];
+      return [
+        wageCapStatusLine.slice(0, dashIdx + 2),
+        wageCapStatusLine.slice(dashIdx + 3),
+      ];
+    })();
+    const wageCapH = !wageCapStatusLines
+      ? BH
+      : wageCapStatusLines.length > 1
+      ? 76
+      : 64;
     boxes.push({
       id: 'wage_cap',
       x: WAGE_CAP_X,
       y: level2Y,
       w: BW,
-      h: wageCapStatusLine ? 64 : BH,
+      h: wageCapH,
       label: 'Wage cap',
       value: wageCap,
       formLine: '(b)(2)(B)',
       kind: 'op',
-      subtitle: wageCapStatusLine ? [wageCapStatusLine] : undefined,
+      subtitle: wageCapStatusLines,
     });
 
     // Phase-in stack — three vertically stacked boxes that mirror
@@ -589,7 +606,6 @@ function BoxLineDiagram({
     // The Reduction box's value is what gets subtracted from L5
     // (qbi_comp_max), so the edge label there just reads "−$X".
     if (inPhaseIn && reductionRate !== undefined) {
-      const wageCapH = wageCapStatusLine ? 64 : BH;
       const excess = Math.max(0, qbiComponentMax - wageCap);
       const excessY = level2Y + wageCapH + 24;
       const phaseY = excessY + BH + 24;
