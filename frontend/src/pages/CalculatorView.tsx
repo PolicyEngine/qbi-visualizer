@@ -444,17 +444,20 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
   // actually binds above the threshold, but surfacing it always lets
   // users see how their W-2 / UBIA inputs relate to the deduction.
   if (showWageCap) {
+    const capActuallyFires = reductionFromCaps > 0;
     boxes.push({
       id: 'wage_cap',
       x: WAGE_CAP_X,
       y: level2Y,
       w: BW,
-      h: 84,
+      h: capActuallyFires ? 84 : 96,
       label: 'Wage cap',
       value: wageCap,
       formLine: '(b)(2)(B)',
       kind: 'op',
-      subtitle: ['max(50% W-2,', '25% W-2 + 2.5% UBIA)'],
+      subtitle: capActuallyFires
+        ? ['max(50% W-2,', '25% W-2 + 2.5% UBIA)']
+        : ['max(50% W-2,', '25% W-2 + 2.5% UBIA)', '(not binding here)'],
     });
   }
 
@@ -465,14 +468,17 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
     ...nonSstbFeeders.map((f, i) => ({ from: `feeder_${f.name}`, to: 'non_sstb', op: i > 0 ? 'Σ' : undefined })),
     ...sstbFeeders.map((f) => ({ from: `feeder_${f.name}`, to: 'sstb' })),
     ...capGainFeeders.map((f, i) => ({ from: `feeder_${f.name}`, to: 'cap_gain', op: i > 0 ? 'Σ' : undefined })),
-    // Wage cap input feeders → Wage cap node, then dashed constraint to
-    // the 20% × Total QBI box. The wage cap caps the QBI side (per
-    // §199A(b)(2)(B)); it never touches the REIT/PTP component, which
-    // is why pointing it at the L10 sum was misleading.
+    // Wage cap input feeders → Wage cap node. The dashed constraint
+    // edge from Wage cap to the 20% × Total QBI box only renders when
+    // the cap actually reduces the QBI side; below the §199A threshold
+    // the cap exists but doesn't fire, so omitting the edge avoids the
+    // misleading impression that a $500 cap is shrinking $18,587.
     ...(showWageCap
       ? [
           ...wageCapInputs.map((f) => ({ from: `feeder_${f.name}`, to: 'wage_cap' })),
-          { from: 'wage_cap', to: 'qbi_comp_max', op: 'caps' } as DiagramEdge,
+          ...(reductionFromCaps > 0
+            ? [{ from: 'wage_cap', to: 'qbi_comp_max', op: 'caps' } as DiagramEdge]
+            : []),
         ]
       : []),
     // Level 0 → first ops
