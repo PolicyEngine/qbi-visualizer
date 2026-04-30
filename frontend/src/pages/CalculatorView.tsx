@@ -242,7 +242,10 @@ function BoxLineDiagram({
   const nonSstb = num(outputs, 'qualified_business_income');
   const sstb = num(outputs, 'sstb_qualified_business_income');
   const totalQbi = nonSstb + sstb;
-  const reitPtp = num(outputs, 'qualified_reit_and_ptp_income');
+  // REIT/PTP is a pure input passthrough — read it from inputs directly
+  // so the box reflects what the user typed without waiting for a
+  // calculation round-trip.
+  const reitPtp = Number(inputs['qualified_reit_and_ptp_income'] ?? 0);
   const qbidAmount = num(outputs, 'qbid_amount');
   const tiBefore = num(outputs, 'taxable_income_less_qbid');
   const netCapGain = num(outputs, 'adjusted_net_capital_gain');
