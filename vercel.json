@@ -2,10 +2,15 @@
   "buildCommand": "cd frontend && npm install && npm run build",
   "outputDirectory": "frontend/dist",
   "framework": null,
+  "cleanUrls": true,
   "rewrites": [
     {
       "source": "/api/:path*",
       "destination": "https://policyengine--qbi-visualizer-backend-web.modal.run/api/:path*"
+    },
+    {
+      "source": "/((?!robots.txt|sitemap.xml|favicon.svg|policyengine-logo.png|og-image.svg|assets/).*)",
+      "destination": "/"
     }
   ]
 }
