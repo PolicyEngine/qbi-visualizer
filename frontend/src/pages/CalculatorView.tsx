@@ -246,7 +246,15 @@ interface DiagramEdge {
   op?: string; // optional inline label, e.g. "×0.20", "−", "MIN"
 }
 
-function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<string, any> }) {
+function BoxLineDiagram({
+  outputs,
+  inputs,
+  parameters,
+}: {
+  outputs: Outputs;
+  inputs: Record<string, any>;
+  parameters?: Record<string, number>;
+}) {
   const nonSstb = num(outputs, 'qualified_business_income');
   const sstb = num(outputs, 'sstb_qualified_business_income');
   const totalQbi = nonSstb + sstb;
@@ -326,6 +334,19 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
   const ubiaVal = inputVal('unadjusted_basis_qualified_property');
   const wageCap = Math.max(0.50 * w2, 0.25 * w2 + 0.025 * ubiaVal);
   const showWageCap = true; // always show the wage / UBIA cap path
+
+  // §199A(b)(3)(B) phase-in: between threshold and threshold + length the
+  // wage cap binds proportionally. reduction_rate = (TI − threshold) /
+  // length, clamped to [0, 1]. Computed from server-supplied parameters
+  // when available; otherwise undefined (no phase-in viz).
+  const threshold = parameters?.phase_out_start;
+  const phaseInLength = parameters?.phase_out_length;
+  const reductionRate =
+    threshold !== undefined && phaseInLength !== undefined && phaseInLength > 0
+      ? Math.max(0, Math.min(1, (tiBefore - threshold) / phaseInLength))
+      : undefined;
+  const inPhaseIn = reductionRate !== undefined && reductionRate > 0 && reductionRate < 1;
+  const aboveRange = reductionRate !== undefined && reductionRate >= 1;
   // The wage cap is "actually contributing" when the reduction is larger
   // than what SSTB phase-out alone could explain (max SSTB reduction =
   // 20% × SSTB QBI when applicable_rate hits 0). Below threshold this
@@ -487,7 +508,19 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
       altLabel('50% W-2', wageOnly, wageOnlyWins),
       altLabel('25% W-2 + 2.5% UBIA', wageUbia, !wageOnlyWins),
     ];
-    if (!wageCapActuallyBinds) subtitleLines.push('(not binding here)');
+    // Phase-in status — derived from TI vs threshold via parameters.
+    if (reductionRate === undefined) {
+      // No threshold info available — fall back to old detection
+      if (!wageCapActuallyBinds) subtitleLines.push('(not binding here)');
+    } else if (reductionRate === 0) {
+      subtitleLines.push('(suspended below threshold)');
+    } else if (inPhaseIn) {
+      subtitleLines.push(`Phase-in ${(reductionRate * 100).toFixed(1)}%`);
+    } else if (aboveRange && wageCap < qbiComponentMax) {
+      subtitleLines.push('(above range — full cap)');
+    } else if (wageCap >= qbiComponentMax) {
+      subtitleLines.push('(not binding here)');
+    }
     boxes.push({
       id: 'wage_cap',
       x: WAGE_CAP_X,
@@ -645,9 +678,64 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
             </g>
           );
         })}
+
+        {/* Phase-in indicator — sits beside the Wage cap box when the
+            filer's TI lands inside the §199A(b)(3)(B) phase-in range.
+            A horizontal progress bar shows where TI sits between
+            threshold and threshold + range, with the rate annotated. */}
+        {(() => {
+          if (!showWageCap || reductionRate === undefined) return null;
+          if (!inPhaseIn) return null;
+          const wageCapBox = boxes.find((b) => b.id === 'wage_cap');
+          if (!wageCapBox) return null;
+          const labelX = wageCapBox.x + wageCapBox.w / 2;
+          const barX = wageCapBox.x + 8;
+          const barY = wageCapBox.y + wageCapBox.h + 16;
+          const barW = wageCapBox.w - 16;
+          return (
+            <g>
+              <text x={labelX} y={barY - 4} textAnchor="middle" fontSize="9" fill="#6B7280">
+                §199A(b)(3)(B) phase-in
+              </text>
+              <rect x={barX} y={barY} width={barW} height={6} rx={3} fill="#F2F4F7" />
+              <rect
+                x={barX}
+                y={barY}
+                width={Math.max(2, barW * reductionRate)}
+                height={6}
+                rx={3}
+                fill="#D97706"
+                opacity={0.7}
+              />
+              {/* Threshold + range tick labels under the bar */}
+              <text x={barX} y={barY + 18} textAnchor="start" fontSize="8" fill="#9CA3AF">
+                ${formatThousandsK(threshold!)}
+              </text>
+              <text x={barX + barW} y={barY + 18} textAnchor="end" fontSize="8" fill="#9CA3AF">
+                ${formatThousandsK(threshold! + phaseInLength!)}
+              </text>
+              <text
+                x={labelX}
+                y={barY + 32}
+                textAnchor="middle"
+                fontSize="10"
+                fontFamily="ui-monospace, monospace"
+                fill="#D97706"
+              >
+                {(reductionRate * 100).toFixed(1)}% (TI ${formatThousandsK(tiBefore)})
+              </text>
+            </g>
+          );
+        })()}
       </svg>
     </div>
   );
+}
+
+function formatThousandsK(val: number): string {
+  if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(1)}M`;
+  if (val >= 1_000) return `${Math.round(val / 1_000)}k`;
+  return `${Math.round(val)}`;
 }
 
 function BreakdownStaged({ outputs }: { outputs: Outputs }) {
@@ -1025,7 +1113,7 @@ export default function CalculatorView() {
                 {resultTab === 'breakdown' ? (
                   <BreakdownStaged outputs={displayOutputs} />
                 ) : (
-                  <BoxLineDiagram outputs={displayOutputs} inputs={inputs} />
+                  <BoxLineDiagram outputs={displayOutputs} inputs={inputs} parameters={result?.parameters} />
                 )}
 
                 {/* Parameters Used — collapsible (hidden when stale) */}
