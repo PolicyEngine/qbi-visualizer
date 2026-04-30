@@ -261,7 +261,10 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
   const reitPtpComponentValue = reitPtpComponent;
   const businessComponents = Math.max(0, qbidAmount - reitPtpComponentValue);
   const reductionFromCaps = Math.max(0, qbiComponentMax - businessComponents);
-  const qbiDeductionBinds = qbidAmount <= incomeLimit;
+  // Don't mark anything as binding when both candidates are zero (stale state).
+  const hasOutputs = qbidAmount > 0 || incomeLimit > 0;
+  const qbiDeductionBinds = hasOutputs && qbidAmount <= incomeLimit;
+  const incomeLimitBinds = hasOutputs && !qbiDeductionBinds;
 
   // Build raw-input feeders aligned to Form 8995 Line 1 / Line 6 / Line 12.
   // Only non-zero, qualified inputs render. Each feeder hangs above its
@@ -360,7 +363,7 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
     // Level 2 — × 20%
     { id: 'qbi_comp_max', x: 90 + SHIFT, y: level2Y, w: BW, h: BH, label: '20% × Total QBI', value: qbiComponentMax, formLine: 'L5', kind: 'op' },
     { id: 'reit_ptp_comp', x: 330 + SHIFT, y: level2Y, w: BW, h: BH, label: '20% × REIT/PTP', value: reitPtpComponent, formLine: 'L9', kind: 'op' },
-    { id: 'income_limit', x: 570 + SHIFT, y: level2Y, w: BW, h: BH, label: 'Income limit', value: incomeLimit, formLine: 'L14', kind: 'op', binds: !qbiDeductionBinds },
+    { id: 'income_limit', x: 570 + SHIFT, y: level2Y, w: BW, h: BH, label: 'Income limit', value: incomeLimit, formLine: 'L14', kind: 'op', binds: incomeLimitBinds },
     // Level 3 — sum into QBI deduction
     {
       id: 'qbi_deduction',
@@ -660,6 +663,10 @@ export default function CalculatorView() {
   const [openSections, setOpenSections] = useState<Set<string>>(new Set(['QBI Income Sources']));
   const [parametersOpen, setParametersOpen] = useState(false);
   const [resultTab, setResultTab] = useState<'breakdown' | 'diagram'>('breakdown');
+  // Track whether the user has ever clicked Calculate. Lets us keep the
+  // result-panel structure visible after the first calc, even when the
+  // user edits inputs and the computed values get cleared.
+  const [hasCalculated, setHasCalculated] = useState(false);
 
   const toggleSection = (name: string) => {
     setOpenSections((prev) => {
@@ -693,6 +700,7 @@ export default function CalculatorView() {
       }
       const data = await res.json();
       setResult(data);
+      setHasCalculated(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Calculation failed');
     } finally {
@@ -888,89 +896,103 @@ export default function CalculatorView() {
           </div>
         )}
 
-        {result ? (
-          <div className="max-w-6xl mx-auto">
-            {/* Primary result */}
-            {primaryOutput && (
-              <div className="mb-8 bg-white rounded-2xl border border-pe-gray-200 p-8 text-center shadow-sm">
-                <div className="text-sm text-pe-text-secondary mb-2">{primaryOutput.label}</div>
-                <div className="text-5xl font-bold text-pe-teal-500">
-                  {typeof result.outputs[primaryOutput.name] === 'number'
-                    ? formatCurrencyLarge(result.outputs[primaryOutput.name] as number)
-                    : '$0'}
-                </div>
-                <div className="mt-3 text-sm text-pe-text-tertiary">
-                  {result.filing_status.replace(/_/g, ' ').toLowerCase()} &middot; Tax year {result.year}
-                </div>
-              </div>
-            )}
-
-            {/* Tabs: numerical breakdown vs computation graph */}
-            <div className="mb-3 flex items-center gap-1 bg-pe-gray-100 p-1 rounded-pe-lg w-fit">
-              {[
-                { id: 'breakdown' as const, label: 'Breakdown' },
-                { id: 'diagram' as const, label: 'Diagram' },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setResultTab(tab.id)}
-                  className={`px-3 py-1.5 rounded-pe-md text-xs font-medium transition-all ${
-                    resultTab === tab.id
-                      ? 'bg-white text-pe-text-primary shadow-sm'
-                      : 'text-pe-text-secondary hover:text-pe-text-primary'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-
-            {resultTab === 'breakdown' ? (
-              <BreakdownStaged outputs={result.outputs} />
-            ) : (
-              <BoxLineDiagram outputs={result.outputs} inputs={inputs} />
-            )}
-
-            {/* Parameters Used — collapsible */}
-            {result.parameters && Object.keys(result.parameters).length > 0 && (
-              <div className="mb-6 bg-white rounded-pe-lg border border-pe-gray-200 overflow-hidden">
-                <button
-                  onClick={() => setParametersOpen((v) => !v)}
-                  className="w-full flex items-center justify-between px-5 py-3 bg-pe-gray-50 hover:bg-pe-gray-100 transition-colors text-left"
-                >
-                  <div className="flex items-center gap-2">
-                    <Chevron open={parametersOpen} />
-                    <span className="text-sm font-semibold text-pe-text-primary">
-                      Model parameters ({result.year})
-                    </span>
-                    <span className="text-xs text-pe-text-tertiary">
-                      ({Object.keys(result.parameters).length})
-                    </span>
+        {(result || hasCalculated) ? (
+          (() => {
+            const isStale = !result;
+            const displayOutputs: Outputs = result?.outputs ?? {};
+            return (
+              <div className="max-w-6xl mx-auto">
+                {isStale && (
+                  <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-pe-lg text-sm text-amber-800 flex items-center justify-between gap-4">
+                    <span>Inputs changed — click <span className="font-semibold">Calculate</span> to refresh the computed values.</span>
                   </div>
-                </button>
-                {parametersOpen && (
-                  <table className="w-full text-sm">
-                    <tbody className="divide-y divide-pe-gray-100 border-t border-pe-gray-100">
-                      {Object.entries(result.parameters).map(([key, val]) => {
-                        const isRate = key.includes('rate');
-                        const label = key
-                          .replace(/_/g, ' ')
-                          .replace(/^\w/, (c) => c.toUpperCase());
-                        return (
-                          <tr key={key}>
-                            <td className="px-5 py-2.5 text-pe-text-secondary">{label}</td>
-                            <td className="px-5 py-2.5 text-right font-mono text-pe-text-primary">
-                              {isRate ? `${(val * 100).toFixed(1)}%` : formatCurrency(val)}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                )}
+
+                {/* Primary result */}
+                {primaryOutput && (
+                  <div className={`mb-8 bg-white rounded-2xl border border-pe-gray-200 p-8 text-center shadow-sm ${isStale ? 'opacity-60' : ''}`}>
+                    <div className="text-sm text-pe-text-secondary mb-2">{primaryOutput.label}</div>
+                    <div className={`text-5xl font-bold ${isStale ? 'text-pe-gray-300' : 'text-pe-teal-500'}`}>
+                      {isStale
+                        ? '—'
+                        : typeof result!.outputs[primaryOutput.name] === 'number'
+                        ? formatCurrencyLarge(result!.outputs[primaryOutput.name] as number)
+                        : '$0'}
+                    </div>
+                    <div className="mt-3 text-sm text-pe-text-tertiary">
+                      {(result?.filing_status ?? inputs.filing_status).replace(/_/g, ' ').toLowerCase()} &middot; Tax year {result?.year ?? inputs.year}
+                    </div>
+                  </div>
+                )}
+
+                {/* Tabs: numerical breakdown vs computation graph */}
+                <div className="mb-3 flex items-center gap-1 bg-pe-gray-100 p-1 rounded-pe-lg w-fit">
+                  {[
+                    { id: 'breakdown' as const, label: 'Breakdown' },
+                    { id: 'diagram' as const, label: 'Diagram' },
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setResultTab(tab.id)}
+                      className={`px-3 py-1.5 rounded-pe-md text-xs font-medium transition-all ${
+                        resultTab === tab.id
+                          ? 'bg-white text-pe-text-primary shadow-sm'
+                          : 'text-pe-text-secondary hover:text-pe-text-primary'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+
+                {resultTab === 'breakdown' ? (
+                  <BreakdownStaged outputs={displayOutputs} />
+                ) : (
+                  <BoxLineDiagram outputs={displayOutputs} inputs={inputs} />
+                )}
+
+                {/* Parameters Used — collapsible (hidden when stale) */}
+                {result && result.parameters && Object.keys(result.parameters).length > 0 && (
+                  <div className="mb-6 bg-white rounded-pe-lg border border-pe-gray-200 overflow-hidden">
+                    <button
+                      onClick={() => setParametersOpen((v) => !v)}
+                      className="w-full flex items-center justify-between px-5 py-3 bg-pe-gray-50 hover:bg-pe-gray-100 transition-colors text-left"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Chevron open={parametersOpen} />
+                        <span className="text-sm font-semibold text-pe-text-primary">
+                          Model parameters ({result.year})
+                        </span>
+                        <span className="text-xs text-pe-text-tertiary">
+                          ({Object.keys(result.parameters).length})
+                        </span>
+                      </div>
+                    </button>
+                    {parametersOpen && (
+                      <table className="w-full text-sm">
+                        <tbody className="divide-y divide-pe-gray-100 border-t border-pe-gray-100">
+                          {Object.entries(result.parameters).map(([key, val]) => {
+                            const isRate = key.includes('rate');
+                            const label = key
+                              .replace(/_/g, ' ')
+                              .replace(/^\w/, (c) => c.toUpperCase());
+                            return (
+                              <tr key={key}>
+                                <td className="px-5 py-2.5 text-pe-text-secondary">{label}</td>
+                                <td className="px-5 py-2.5 text-right font-mono text-pe-text-primary">
+                                  {isRate ? `${(val * 100).toFixed(1)}%` : formatCurrency(val)}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
                 )}
               </div>
-            )}
-          </div>
+            );
+          })()
         ) : (
           <div className="h-full flex items-center justify-center">
             <div className="text-center max-w-md">
