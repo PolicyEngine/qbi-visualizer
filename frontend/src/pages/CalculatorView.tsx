@@ -628,7 +628,16 @@ function BoxLineDiagram({
           ...wageCapInputs
             .filter((f) => f.name.startsWith('sstb_'))
             .map((f) => ({ from: `feeder_${f.name}`, to: 'wage_cap' } as DiagramEdge)),
-          ...(wageCapActuallyBinds
+          // Route the dashed cap path through the Phase-in box when the
+          // filer is in the §199A(b)(3)(B) phase-in range. This makes
+          // the chain visually explicit: Wage cap → Phase-in % →
+          // L5 (post-cap value).
+          ...(wageCapActuallyBinds && inPhaseIn
+            ? [
+                { from: 'wage_cap', to: 'phase_in_rate' } as DiagramEdge,
+                { from: 'phase_in_rate', to: 'qbi_comp_max', op: 'caps × rate' } as DiagramEdge,
+              ]
+            : wageCapActuallyBinds
             ? [{ from: 'wage_cap', to: 'qbi_comp_max', op: 'caps' } as DiagramEdge]
             : []),
         ]
@@ -689,7 +698,7 @@ function BoxLineDiagram({
           const cp1 = { x: a.x, y: a.y + dy * 0.5 };
           const cp2 = { x: b.x, y: b.y - dy * 0.5 };
           const isFinalEdge = e.to === 'final_qbid';
-          const isConstraint = e.from === 'wage_cap';
+          const isConstraint = e.from === 'wage_cap' || e.from === 'phase_in_rate';
           const stroke = isFinalEdge ? '#319795' : isConstraint ? '#D97706' : '#9CA3AF';
           const marker = isFinalEdge ? 'url(#arrow-teal)' : isConstraint ? 'url(#arrow-amber)' : 'url(#arrow)';
           const opLabelW = e.op && e.op.length > 4 ? Math.max(36, e.op.length * 7) : 36;
@@ -745,11 +754,24 @@ function BoxLineDiagram({
                 </text>
               )}
               {b.subtitle &&
-                (Array.isArray(b.subtitle) ? b.subtitle : [b.subtitle]).map((line, i) => (
-                  <text key={i} x={b.x + b.w / 2} y={b.y + 52 + i * 11} textAnchor="middle" fontSize="9" fill="#9CA3AF">
-                    {line}
-                  </text>
-                ))}
+                (Array.isArray(b.subtitle) ? b.subtitle : [b.subtitle]).map((line, i) => {
+                  // Status notes wrapped in parens — e.g. "(not binding here)" —
+                  // get bolder/darker styling so the user notices them.
+                  const isStatus = line.trim().startsWith('(');
+                  return (
+                    <text
+                      key={i}
+                      x={b.x + b.w / 2}
+                      y={b.y + 52 + i * 11}
+                      textAnchor="middle"
+                      fontSize="9"
+                      fill={isStatus ? '#374151' : '#9CA3AF'}
+                      fontWeight={isStatus ? 600 : 400}
+                    >
+                      {line}
+                    </text>
+                  );
+                })}
               {b.binds && b.kind !== 'final' && (
                 <text x={b.x + b.w - 4} y={b.y + 11} textAnchor="end" fontSize="8" fill="#319795" fontWeight={700}>★ BINDS</text>
               )}
