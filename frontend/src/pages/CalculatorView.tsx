@@ -310,14 +310,13 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
   const sstbFeeders = feedersFor('sstb');
   const capGainFeeders = feedersFor('cap_gain');
 
-  // Wage / UBIA cap area (§199A(b)(2)(B)). W-2 wages and UBIA are always
-  // shown so users can see the path even when the values are zero. The
-  // SSTB-allocable variants only render when non-zero (they're a subset
-  // of total W-2 / UBIA so showing them at zero is mostly noise).
+  // Wage / UBIA cap area (§199A(b)(2)(B)). Only W-2 wages renders by
+  // default (so the cap path is always visible) — UBIA and the SSTB-
+  // allocable variants only render when their input is non-zero.
   type WageInput = { name: string; label: string; value: number; alwaysShow?: boolean };
   const wageCapInputs: WageInput[] = [
     { name: 'w2_wages_from_qualified_business', label: 'W-2 wages', alwaysShow: true },
-    { name: 'unadjusted_basis_qualified_property', label: 'UBIA', alwaysShow: true },
+    { name: 'unadjusted_basis_qualified_property', label: 'UBIA' },
     { name: 'sstb_w2_wages_from_qualified_business', label: 'SSTB W-2' },
     { name: 'sstb_unadjusted_basis_qualified_property', label: 'SSTB UBIA' },
   ]
