@@ -534,7 +534,7 @@ function BoxLineDiagram({
       if (reductionRate === undefined) {
         return wageCapActuallyBinds ? undefined : '(not binding here)';
       }
-      if (reductionRate === 0) return '(suspended below threshold)';
+      if (reductionRate === 0) return '(below threshold — cap not applied)';
       if (inPhaseIn) return undefined; // shown in dedicated phase-in box
       if (aboveRange && wageCap < qbiComponentMax) return '(above range — full cap)';
       if (wageCap >= qbiComponentMax) return '(not binding here)';
