@@ -303,16 +303,37 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
   const sstbFeeders = feedersFor('sstb');
   const capGainFeeders = feedersFor('cap_gain');
 
+  // Wage / UBIA cap area (§199A(b)(2)(B))
+  type WageInput = { name: string; label: string; value: number };
+  const wageCapInputs: WageInput[] = [
+    { name: 'w2_wages_from_qualified_business', label: 'W-2 wages' },
+    { name: 'unadjusted_basis_qualified_property', label: 'UBIA' },
+    { name: 'sstb_w2_wages_from_qualified_business', label: 'SSTB W-2 wages' },
+    { name: 'sstb_unadjusted_basis_qualified_property', label: 'SSTB UBIA' },
+  ]
+    .map((f) => ({ ...f, value: inputVal(f.name) }))
+    .filter((f) => f.value > 0);
+  const w2 = inputVal('w2_wages_from_qualified_business');
+  const ubiaVal = inputVal('unadjusted_basis_qualified_property');
+  const wageCap = Math.max(0.50 * w2, 0.25 * w2 + 0.025 * ubiaVal);
+  const showWageCap = wageCapInputs.length > 0;
+
   // Vertical space the feeder area needs (max stack height across columns).
   const FEEDER_BH = 36;
   const FEEDER_GAP = 6;
-  const maxFeederStack = Math.max(nonSstbFeeders.length, sstbFeeders.length, capGainFeeders.length);
+  const maxFeederStack = Math.max(
+    nonSstbFeeders.length,
+    sstbFeeders.length,
+    capGainFeeders.length,
+    wageCapInputs.length,
+  );
   const feederAreaH = maxFeederStack > 0 ? maxFeederStack * (FEEDER_BH + FEEDER_GAP) + 24 : 0;
 
-  // Layout grid (top-down)
-  const W = 800;
+  // Layout grid (top-down). Wider canvas to fit the new wage-cap column.
+  const W = 1120;
   const BW = 150; // box width
   const BH = 52;  // box height
+  const WAGE_CAP_X = 950;
   const level0Y = feederAreaH + 10;
   const level1Y = level0Y + 120;
   const level2Y = level1Y + 120;
@@ -374,6 +395,10 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
   addFeederColumn(nonSstbFeeders, 10);
   addFeederColumn(sstbFeeders, 170);
   addFeederColumn(capGainFeeders, 650);
+  // Wage / UBIA cap inputs sit above the Wage cap box on the right.
+  if (showWageCap) {
+    addFeederColumn(wageCapInputs.map((w) => ({ name: w.name, label: w.label, value: w.value, formLine: '§199A(b)(2)' })), WAGE_CAP_X);
+  }
 
   // Tag the Non-SSTB QBI box with the SE-tax / health / retirement
   // allocation reduction (when gross > net) so the shrinkage is visible
@@ -381,14 +406,33 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
   const grossNonSstb = nonSstbFeeders.reduce((s, f) => s + f.value, 0);
   if (grossNonSstb > nonSstb && nonSstb > 0) {
     const nonSstbBox = boxes.find((b) => b.id === 'non_sstb')!;
-    nonSstbBox.subtitle = `after −${formatCurrency(grossNonSstb - nonSstb)} SE-tax / health / retirement allocation`;
+    nonSstbBox.subtitle = `−${formatCurrency(grossNonSstb - nonSstb)} SE alloc.`;
     nonSstbBox.h = 68;
   }
   const grossSstb = sstbFeeders.reduce((s, f) => s + f.value, 0);
   if (grossSstb > sstb && sstb > 0) {
     const sstbBox = boxes.find((b) => b.id === 'sstb')!;
-    sstbBox.subtitle = `after −${formatCurrency(grossSstb - sstb)} SE-tax / health / retirement allocation`;
+    sstbBox.subtitle = `−${formatCurrency(grossSstb - sstb)} SE alloc.`;
     sstbBox.h = 68;
+  }
+
+  // Wage cap node (informational): shows the computed wage / UBIA cap
+  // value. It connects to L10 with a dashed "caps" edge — the cap only
+  // actually binds above the threshold, but surfacing it always lets
+  // users see how their W-2 / UBIA inputs relate to the deduction.
+  if (showWageCap) {
+    boxes.push({
+      id: 'wage_cap',
+      x: WAGE_CAP_X,
+      y: level2Y,
+      w: BW,
+      h: 68,
+      label: 'Wage / UBIA cap',
+      value: wageCap,
+      formLine: '§199A(b)(2)(B)',
+      kind: 'op',
+      subtitle: 'max(50% W-2, 25% W-2 + 2.5% UBIA)',
+    });
   }
 
   const edges: DiagramEdge[] = [
@@ -398,6 +442,13 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
     ...nonSstbFeeders.map((f, i) => ({ from: `feeder_${f.name}`, to: 'non_sstb', op: i > 0 ? 'Σ' : undefined })),
     ...sstbFeeders.map((f) => ({ from: `feeder_${f.name}`, to: 'sstb' })),
     ...capGainFeeders.map((f, i) => ({ from: `feeder_${f.name}`, to: 'cap_gain', op: i > 0 ? 'Σ' : undefined })),
+    // Wage cap input feeders → Wage cap node, then dashed constraint to L10
+    ...(showWageCap
+      ? [
+          ...wageCapInputs.map((f) => ({ from: `feeder_${f.name}`, to: 'wage_cap' })),
+          { from: 'wage_cap', to: 'qbi_deduction', op: 'caps' } as DiagramEdge,
+        ]
+      : []),
     // Level 0 → first ops
     { from: 'non_sstb', to: 'total_qbi' },
     { from: 'sstb', to: 'total_qbi', op: 'Σ' },
@@ -435,6 +486,9 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
           <marker id="arrow-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
             <path d="M 0 0 L 10 5 L 0 10 z" fill="#319795" />
           </marker>
+          <marker id="arrow-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#D97706" />
+          </marker>
         </defs>
 
         {/* Edges */}
@@ -448,22 +502,25 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
           const cp1 = { x: a.x, y: a.y + dy * 0.5 };
           const cp2 = { x: b.x, y: b.y - dy * 0.5 };
           const isFinalEdge = e.to === 'final_qbid';
-          const stroke = isFinalEdge ? '#319795' : '#9CA3AF';
-          const marker = isFinalEdge ? 'url(#arrow-teal)' : 'url(#arrow)';
+          const isConstraint = e.from === 'wage_cap';
+          const stroke = isFinalEdge ? '#319795' : isConstraint ? '#D97706' : '#9CA3AF';
+          const marker = isFinalEdge ? 'url(#arrow-teal)' : isConstraint ? 'url(#arrow-amber)' : 'url(#arrow)';
+          const opLabelW = e.op && e.op.length > 4 ? Math.max(36, e.op.length * 7) : 36;
           return (
             <g key={i}>
               <path
                 d={`M ${a.x} ${a.y} C ${cp1.x} ${cp1.y}, ${cp2.x} ${cp2.y}, ${b.x} ${b.y - 6}`}
                 stroke={stroke}
                 strokeWidth={isFinalEdge ? 2 : 1.5}
+                strokeDasharray={isConstraint ? '5 4' : undefined}
                 fill="none"
                 markerEnd={marker}
                 opacity={isFinalEdge ? 1 : 0.85}
               />
               {e.op && (
                 <g transform={`translate(${(a.x + b.x) / 2}, ${(a.y + b.y) / 2})`}>
-                  <rect x={-18} y={-9} width={36} height={18} rx={9} fill="white" stroke="#E2E8F0" strokeWidth={1} />
-                  <text x={0} y={4} textAnchor="middle" fontSize="10" fontFamily="ui-monospace, monospace" fill="#4B5563">
+                  <rect x={-opLabelW / 2} y={-9} width={opLabelW} height={18} rx={9} fill="white" stroke="#E2E8F0" strokeWidth={1} />
+                  <text x={0} y={4} textAnchor="middle" fontSize="10" fontFamily="ui-monospace, monospace" fill={isConstraint ? '#D97706' : '#4B5563'}>
                     {e.op}
                   </text>
                 </g>
