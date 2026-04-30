@@ -551,7 +551,7 @@ function BoxLineDiagram({
       h: BH,
       label: '50% × W-2',
       value: wageOnly,
-      formLine: '8995-A L13',
+      formLine: 'L13',
       kind: 'op',
       binds: wageOnlyWins && wageCap > 0,
     });
@@ -563,7 +563,7 @@ function BoxLineDiagram({
       h: BH,
       label: '25% W-2 + 2.5% UBIA',
       value: wageUbia,
-      formLine: '8995-A L16',
+      formLine: 'L16',
       kind: 'op',
       binds: !wageOnlyWins && wageCap > 0,
     });
@@ -595,7 +595,7 @@ function BoxLineDiagram({
         label: 'Phase-in',
         value: reductionRate * 100,
         valueFormat: 'percent',
-        formLine: '8995-A L23',
+        formLine: 'L23',
         kind: 'op',
         subtitle: [
           `TI ${formatCurrency(tiBefore)}`,
