@@ -457,19 +457,27 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
   // actually binds above the threshold, but surfacing it always lets
   // users see how their W-2 / UBIA inputs relate to the deduction.
   if (showWageCap) {
+    const wageOnly = 0.50 * w2;
+    const wageUbia = 0.25 * w2 + 0.025 * ubiaVal;
+    const wageOnlyWins = wageOnly >= wageUbia;
+    const altLabel = (label: string, val: number, wins: boolean): string =>
+      `${wins ? '★ ' : '  '}${label} = ${formatCurrency(val)}`;
+    const subtitleLines = [
+      altLabel('50% W-2', wageOnly, wageOnlyWins),
+      altLabel('25% W-2 + 2.5% UBIA', wageUbia, !wageOnlyWins),
+    ];
+    if (!wageCapActuallyBinds) subtitleLines.push('(not binding here)');
     boxes.push({
       id: 'wage_cap',
       x: WAGE_CAP_X,
       y: level2Y,
       w: BW,
-      h: wageCapActuallyBinds ? 84 : 96,
+      h: 52 + subtitleLines.length * 12 + 8,
       label: 'Wage cap',
       value: wageCap,
       formLine: '(b)(2)(B)',
       kind: 'op',
-      subtitle: wageCapActuallyBinds
-        ? ['max(50% W-2,', '25% W-2 + 2.5% UBIA)']
-        : ['max(50% W-2,', '25% W-2 + 2.5% UBIA)', '(not binding here)'],
+      subtitle: subtitleLines,
     });
   }
 
