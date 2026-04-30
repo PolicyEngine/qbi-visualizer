@@ -778,8 +778,11 @@ function BoxLineDiagram({
       : [{ from: 'qbi_comp_max', to: 'qbi_deduction' } as DiagramEdge]),
     { from: 'reit_ptp_comp', to: 'qbi_deduction', op: 'Σ' },
     // Final min
-    { from: 'qbi_deduction', to: 'final_qbid' },
-    { from: 'income_limit', to: 'final_qbid', op: 'MIN' },
+    // Both branches enter Final QBID from their respective sides so the
+    // bezier doesn't overshoot — without side anchors, income_limit's
+    // top-down curve dips into the Phase-in rate box.
+    { from: 'qbi_deduction', to: 'final_qbid', exitSide: 'left', enterSide: 'right' },
+    { from: 'income_limit', to: 'final_qbid', op: 'MIN', exitSide: 'right', enterSide: 'left' },
   ];
 
   const boxById = (id: string) => boxes.find((b) => b.id === id)!;
