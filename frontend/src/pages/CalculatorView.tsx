@@ -310,20 +310,23 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
   const sstbFeeders = feedersFor('sstb');
   const capGainFeeders = feedersFor('cap_gain');
 
-  // Wage / UBIA cap area (§199A(b)(2)(B))
-  type WageInput = { name: string; label: string; value: number };
+  // Wage / UBIA cap area (§199A(b)(2)(B)). W-2 wages and UBIA are always
+  // shown so users can see the path even when the values are zero. The
+  // SSTB-allocable variants only render when non-zero (they're a subset
+  // of total W-2 / UBIA so showing them at zero is mostly noise).
+  type WageInput = { name: string; label: string; value: number; alwaysShow?: boolean };
   const wageCapInputs: WageInput[] = [
-    { name: 'w2_wages_from_qualified_business', label: 'W-2 wages' },
-    { name: 'unadjusted_basis_qualified_property', label: 'UBIA' },
+    { name: 'w2_wages_from_qualified_business', label: 'W-2 wages', alwaysShow: true },
+    { name: 'unadjusted_basis_qualified_property', label: 'UBIA', alwaysShow: true },
     { name: 'sstb_w2_wages_from_qualified_business', label: 'SSTB W-2' },
     { name: 'sstb_unadjusted_basis_qualified_property', label: 'SSTB UBIA' },
   ]
     .map((f) => ({ ...f, value: inputVal(f.name) }))
-    .filter((f) => f.value > 0);
+    .filter((f) => f.alwaysShow || f.value > 0);
   const w2 = inputVal('w2_wages_from_qualified_business');
   const ubiaVal = inputVal('unadjusted_basis_qualified_property');
   const wageCap = Math.max(0.50 * w2, 0.25 * w2 + 0.025 * ubiaVal);
-  const showWageCap = wageCapInputs.length > 0;
+  const showWageCap = true; // always show the wage / UBIA cap path
   // The wage cap is "actually contributing" when the reduction is larger
   // than what SSTB phase-out alone could explain (max SSTB reduction =
   // 20% × SSTB QBI when applicable_rate hits 0). Below threshold this
