@@ -958,8 +958,8 @@ export default function CalculatorView() {
                 {/* Tabs: numerical breakdown vs computation graph */}
                 <div className="mb-3 flex items-center gap-1 bg-pe-gray-100 p-1 rounded-pe-lg w-fit">
                   {[
-                    { id: 'breakdown' as const, label: 'Breakdown' },
                     { id: 'diagram' as const, label: 'Diagram' },
+                    { id: 'breakdown' as const, label: 'Breakdown' },
                   ].map((tab) => (
                     <button
                       key={tab.id}
