@@ -329,8 +329,9 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
   );
   const feederAreaH = maxFeederStack > 0 ? maxFeederStack * (FEEDER_BH + FEEDER_GAP) + 24 : 0;
 
-  // Layout grid (top-down). Wider canvas to fit the new wage-cap column.
-  const W = 1120;
+  // Layout grid (top-down). Width is computed dynamically below from the
+  // rightmost rendered box so the diagram fills its container with no
+  // wasted gutters.
   const BW = 150; // box width
   const BH = 52;  // box height
   // When the wage-cap area is shown, it lives on the LEFT and pushes the
@@ -399,8 +400,9 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
   addFeederColumn(sstbFeeders, 170 + SHIFT);
   addFeederColumn(capGainFeeders, 650 + SHIFT);
   // Wage / UBIA cap inputs sit above the Wage cap box on the LEFT.
+  // No formLine here — these are user inputs, not Form 8995 line items.
   if (showWageCap) {
-    addFeederColumn(wageCapInputs.map((w) => ({ name: w.name, label: w.label, value: w.value, formLine: '§199A(b)(2)' })), WAGE_CAP_X);
+    addFeederColumn(wageCapInputs.map((w) => ({ name: w.name, label: w.label, value: w.value, formLine: '' })), WAGE_CAP_X);
   }
 
   // Tag the Non-SSTB QBI box with the SE-tax / health / retirement
@@ -430,9 +432,9 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
       y: level2Y,
       w: BW,
       h: 68,
-      label: 'Wage / UBIA cap',
+      label: 'Wage cap',
       value: wageCap,
-      formLine: '§199A(b)(2)(B)',
+      formLine: '(b)(2)(B)',
       kind: 'op',
       subtitle: 'max(50% W-2, 25% W-2 + 2.5% UBIA)',
     });
@@ -475,13 +477,19 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
   const bottom = (b: DiagramBox) => ({ x: b.x + b.w / 2, y: b.y + b.h });
   const top = (b: DiagramBox) => ({ x: b.x + b.w / 2, y: b.y });
 
+  // Tighten the viewBox to the actual content extent so the diagram
+  // is centered horizontally within whatever container width Tailwind
+  // gives us (no empty gutters on the right).
+  const contentRight = Math.max(...boxes.map((b) => b.x + b.w));
+  const tightW = contentRight + 10;
+
   return (
     <div className="mb-6 bg-white rounded-pe-lg border border-pe-gray-200 p-4">
       <h3 className="text-sm font-semibold text-pe-text-primary mb-1">Computation graph</h3>
       <p className="text-xs text-pe-text-tertiary mb-4">
         Each box is a value; each line is data flow. Operation labels (Σ, −, ×0.20, MIN) sit on the lines.
       </p>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="xMidYMid meet">
+      <svg viewBox={`0 0 ${tightW} ${H}`} className="w-full" preserveAspectRatio="xMidYMid meet">
         <defs>
           <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
             <path d="M 0 0 L 10 5 L 0 10 z" fill="#9CA3AF" />
