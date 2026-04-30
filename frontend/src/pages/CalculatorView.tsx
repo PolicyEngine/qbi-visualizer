@@ -271,7 +271,7 @@ function BoxLineDiagram({
     inputs[`${name}_would_be_qualified`] === true;
   const inputVal = (name: string): number => Number(inputs[name] ?? 0);
 
-  const feedersFor = (target: 'non_sstb' | 'sstb' | 'cap_gain'): Feeder[] => {
+  const feedersFor = (target: 'non_sstb' | 'sstb' | 'cap_gain' | 'ti'): Feeder[] => {
     if (target === 'non_sstb') {
       return [
         { name: 'self_employment_income', label: 'Self-employment', formLine: 'L1' },
@@ -289,10 +289,20 @@ function BoxLineDiagram({
         .filter((f) => inputVal(f.name) > 0 && isQualified(f.name))
         .map((f) => ({ ...f, value: inputVal(f.name) }));
     }
-    // cap_gain feeders
+    if (target === 'cap_gain') {
+      return [
+        { name: 'long_term_capital_gains', label: 'Long-term capital gains', formLine: 'L12' },
+        { name: 'qualified_dividend_income', label: 'Qualified dividends', formLine: 'L12' },
+      ]
+        .filter((f) => inputVal(f.name) > 0)
+        .map((f) => ({ ...f, value: inputVal(f.name) }));
+    }
+    // ti feeders — non-QBI income that flows into TI alongside the
+    // QBI/cap-gain pieces already shown elsewhere in the diagram.
     return [
-      { name: 'long_term_capital_gains', label: 'Long-term capital gains', formLine: 'L12' },
-      { name: 'qualified_dividend_income', label: 'Qualified dividends', formLine: 'L12' },
+      { name: 'employment_income', label: 'W-2 wages', formLine: '1040 L1' },
+      { name: 'taxable_interest_income', label: 'Interest', formLine: '1040 L2b' },
+      { name: 'short_term_capital_gains', label: 'Short-term gains', formLine: 'Sch D' },
     ]
       .filter((f) => inputVal(f.name) > 0)
       .map((f) => ({ ...f, value: inputVal(f.name) }));
@@ -301,6 +311,7 @@ function BoxLineDiagram({
   const nonSstbFeeders = feedersFor('non_sstb');
   const sstbFeeders = feedersFor('sstb');
   const capGainFeeders = feedersFor('cap_gain');
+  const tiFeeders = feedersFor('ti');
 
   // Wage / UBIA cap area (§199A(b)(2)(B)). Each input has a FIXED grid
   // position (col 0 = wages, col 1 = property; row 0 = total, row 1 =
@@ -381,6 +392,7 @@ function BoxLineDiagram({
     nonSstbFeeders.length,
     sstbFeeders.length,
     capGainFeeders.length,
+    tiFeeders.length,
     wageRows,
   );
   const feederAreaH = maxFeederStack > 0 ? maxFeederStack * (FEEDER_BH + FEEDER_GAP) + 24 : 0;
@@ -509,6 +521,7 @@ function BoxLineDiagram({
     });
   };
   addFeederColumn(capGainFeeders, INCOME_X);
+  addFeederColumn(tiFeeders, INCOME_X + BW + WAGE_HGAP);
   addFeederColumn(nonSstbFeeders, 10 + SHIFT);
   addFeederColumn(sstbFeeders, 170 + SHIFT);
   // Wage cap inputs sit in fixed grid positions: col 0 = wages, col 1
@@ -697,6 +710,7 @@ function BoxLineDiagram({
     ...nonSstbFeeders.map((f, i) => ({ from: `feeder_${f.name}`, to: 'non_sstb', op: i > 0 ? 'Σ' : undefined })),
     ...sstbFeeders.map((f) => ({ from: `feeder_${f.name}`, to: 'sstb' })),
     ...capGainFeeders.map((f, i) => ({ from: `feeder_${f.name}`, to: 'cap_gain', op: i > 0 ? 'Σ' : undefined })),
+    ...tiFeeders.map((f, i) => ({ from: `feeder_${f.name}`, to: 'ti', op: i > 0 ? 'Σ' : undefined })),
     // Wage cap routing — feeders go through the 50% W-2 and
     // 25% W-2 + 2.5% UBIA alternative boxes (Form 8995-A L13 / L16)
     // before merging at Wage cap (max). SSTB-allocable feeders bypass
