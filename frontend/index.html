@@ -2,14 +2,180 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <title>QBID Calculator | PolicyEngine</title>
+    <title>QBI Deduction Calculator (IRC §199A) | PolicyEngine</title>
+    <meta
+      name="description"
+      content="Free interactive Qualified Business Income Deduction calculator powered by PolicyEngine US. Models §199A phase-in, W-2 wage and UBIA limits, SSTB phase-out, and REIT/PTP income for any filing status and tax year."
+    />
+    <link rel="canonical" href="https://qbi-visualizer.vercel.app/" />
+    <meta name="theme-color" content="#2C6496" />
+
+    <!-- Open Graph / Facebook / LinkedIn / Slack -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="PolicyEngine" />
+    <meta property="og:url" content="https://qbi-visualizer.vercel.app/" />
+    <meta property="og:title" content="QBI Deduction Calculator (IRC §199A)" />
+    <meta
+      property="og:description"
+      content="Free interactive Qualified Business Income Deduction calculator powered by PolicyEngine US. Models phase-in, W-2 wage and UBIA limits, and SSTB phase-out."
+    />
+    <meta property="og:image" content="https://qbi-visualizer.vercel.app/og-image.svg" />
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@PolicyEngine" />
+    <meta name="twitter:title" content="QBI Deduction Calculator (IRC §199A)" />
+    <meta
+      name="twitter:description"
+      content="Free interactive Qualified Business Income Deduction calculator powered by PolicyEngine US."
+    />
+    <meta name="twitter:image" content="https://qbi-visualizer.vercel.app/og-image.svg" />
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+
+    <!-- Font preconnect (saves ~100-300ms on cold loads) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Structured data: WebApplication + FAQPage -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebApplication",
+            "name": "QBI Deduction Calculator",
+            "alternateName": "Section 199A Calculator",
+            "url": "https://qbi-visualizer.vercel.app/",
+            "applicationCategory": "FinanceApplication",
+            "operatingSystem": "Any",
+            "description": "Interactive Qualified Business Income Deduction calculator under IRC §199A. Models phase-in, W-2 wage and UBIA limits, SSTB phase-out, and REIT/PTP income.",
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+            "creator": {
+              "@type": "Organization",
+              "name": "PolicyEngine",
+              "url": "https://policyengine.org/"
+            }
+          },
+          {
+            "@type": "FAQPage",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "What is the QBI deduction?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "The Qualified Business Income (QBI) deduction is a 20% deduction on net income from pass-through businesses created by IRC §199A. It is available to sole proprietors, partnerships, S-corporations, and certain trusts and estates."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Who qualifies for the §199A deduction?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Owners of a qualified trade or business (a §162 trade or business other than the trade or business of being an employee) with taxable income above zero. Above the §199A(e) threshold, additional W-2 wage and UBIA limitations apply, and Specified Service Trades or Businesses (SSTBs) phase out."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "What is an SSTB?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "A Specified Service Trade or Business under §199A(d)(2) — health, law, accounting, actuarial, performing arts, consulting, athletics, financial / brokerage services, investing, or any business whose principal asset is the reputation or skill of its owners. SSTB income phases out above the threshold."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "What are the W-2 wage and UBIA limits?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Above the threshold, the QBI component for each business is capped at the greater of (a) 50% of W-2 wages paid by the business, or (b) 25% of W-2 wages plus 2.5% of the unadjusted basis immediately after acquisition (UBIA) of qualified property — see §199A(b)(2)(B)."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "What is the difference between Form 8995 and Form 8995-A?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Form 8995 is the simplified form for filers with taxable income below the §199A threshold. Form 8995-A is the longer form required when taxable income exceeds the threshold and the wage / UBIA limits or SSTB phase-out apply."
+                }
+              }
+            ]
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!--
+        Static SEO snippet — replaced by React on hydration.
+        Gives crawlers and link-preview bots real content to index
+        before client-side JS executes.
+      -->
+      <header>
+        <h1>QBI Deduction Calculator (IRC §199A)</h1>
+        <p>
+          Free interactive calculator for the Qualified Business Income
+          Deduction under <strong>IRC §199A</strong>, powered by
+          <a href="https://policyengine.org/us">PolicyEngine US</a>.
+          Enter your filing status, taxable income, and qualified business
+          income, and the tool shows the full §199A computation step by
+          step — including the §199A(b)(3)(B) phase-in, W-2 wage and UBIA
+          limits, SSTB phase-out, and REIT / PTP income.
+        </p>
+      </header>
+      <section>
+        <h2>What does this calculator model?</h2>
+        <ul>
+          <li>20% × Qualified Business Income for non-SSTB and SSTB activities</li>
+          <li>§199A(b)(2)(B) wage cap: greater of 50% × W-2 or 25% × W-2 + 2.5% × UBIA</li>
+          <li>§199A(b)(3)(B) phase-in between the threshold and end of phase-in range</li>
+          <li>§199A(d)(3) SSTB phase-out for specified service trades or businesses</li>
+          <li>Flat 20% deduction on qualified REIT dividends and PTP income</li>
+          <li>§199A(a)(1)(B) overall income limit (20% × taxable income less net capital gain)</li>
+        </ul>
+      </section>
+      <section>
+        <h2>Frequently asked questions</h2>
+        <h3>What is the QBI deduction?</h3>
+        <p>
+          The Qualified Business Income deduction is a 20% deduction on net
+          income from pass-through businesses created by IRC §199A. It is
+          available to sole proprietors, partnerships, S-corporations, and
+          certain trusts and estates.
+        </p>
+        <h3>Who qualifies for the §199A deduction?</h3>
+        <p>
+          Owners of a qualified trade or business (a §162 trade or business
+          other than being an employee) with taxable income above zero.
+          Above the §199A(e) threshold, additional W-2 wage and UBIA
+          limitations apply, and Specified Service Trades or Businesses
+          phase out.
+        </p>
+        <h3>What is an SSTB?</h3>
+        <p>
+          A Specified Service Trade or Business under §199A(d)(2) — health,
+          law, accounting, actuarial, performing arts, consulting,
+          athletics, financial / brokerage services, investing, or any
+          business whose principal asset is the reputation or skill of its
+          owners.
+        </p>
+      </section>
+      <noscript>
+        <p>
+          This calculator requires JavaScript. The full computation runs
+          client-side using PolicyEngine US — see the
+          <a href="https://github.com/PolicyEngine/qbi-visualizer">source on GitHub</a>.
+        </p>
+      </noscript>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

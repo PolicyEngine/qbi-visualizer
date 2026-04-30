@@ -867,7 +867,7 @@ function BoxLineDiagram({
 
   return (
     <div className="mb-6 bg-white rounded-pe-lg border border-pe-gray-200 p-4">
-      <h3 className="text-sm font-semibold text-pe-text-primary mb-3">Computation graph</h3>
+      <h2 className="text-sm font-semibold text-pe-text-primary mb-3">Computation graph</h2>
       <svg viewBox={`0 0 ${tightW} ${H}`} className="w-full" preserveAspectRatio="xMidYMid meet">
         <defs>
           <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
@@ -995,7 +995,7 @@ function BreakdownStaged({ outputs }: { outputs: Outputs }) {
   const stages = buildStages(outputs);
   return (
     <div className="mb-6 space-y-4">
-      <h3 className="text-sm font-semibold text-pe-text-primary">QBI computation breakdown</h3>
+      <h2 className="text-sm font-semibold text-pe-text-primary">QBI computation breakdown</h2>
       {stages.map((stage) => (
         <div key={stage.id} className="bg-white rounded-pe-lg border border-pe-gray-200 overflow-hidden">
           <div className="px-5 py-3 bg-pe-gray-50 border-b border-pe-gray-200 flex items-baseline justify-between gap-4">
@@ -1120,16 +1120,27 @@ export default function CalculatorView() {
   return (
     <div className="h-full flex bg-pe-bg-secondary">
       {/* Left: Inputs */}
-      <div className="w-[460px] border-r border-pe-gray-200 bg-white overflow-y-auto flex flex-col">
+      <aside
+        className="w-[460px] border-r border-pe-gray-200 bg-white overflow-y-auto flex flex-col"
+        aria-label="QBI deduction inputs"
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleCalculate();
+          }}
+          className="flex flex-col flex-1"
+        >
         <div className="p-5 pb-3 flex-1">
           {/* Filing Status & Year — always visible */}
           <div className="grid grid-cols-3 gap-3 mb-4">
             <div className="col-span-2">
-              <label className="flex items-center text-xs font-medium text-pe-text-tertiary mb-1">
+              <label htmlFor="field-filing_status" className="flex items-center text-xs font-medium text-pe-text-tertiary mb-1">
                 Filing status
                 <InfoTooltip definition={INPUT_DEFINITIONS.filing_status} />
               </label>
               <select
+                id="field-filing_status"
                 value={inputs.filing_status}
                 onChange={(e) => handleChange('filing_status', e.target.value)}
                 className="w-full px-2.5 py-1.5 border border-pe-gray-200 rounded-pe-md text-sm bg-white focus:outline-none focus:ring-1 focus:ring-pe-teal-500"
@@ -1142,11 +1153,12 @@ export default function CalculatorView() {
               </select>
             </div>
             <div>
-              <label className="flex items-center text-xs font-medium text-pe-text-tertiary mb-1">
+              <label htmlFor="field-year" className="flex items-center text-xs font-medium text-pe-text-tertiary mb-1">
                 Tax year
                 <InfoTooltip definition={INPUT_DEFINITIONS.year} />
               </label>
               <select
+                id="field-year"
                 value={inputs.year}
                 onChange={(e) => handleChange('year', parseInt(e.target.value))}
                 className="w-full px-2.5 py-1.5 border border-pe-gray-200 rounded-pe-md text-sm bg-white focus:outline-none focus:ring-1 focus:ring-pe-teal-500"
@@ -1192,13 +1204,14 @@ export default function CalculatorView() {
                     key={income.name}
                     className="grid grid-cols-[1fr_140px_72px] gap-1 items-center px-3 py-1.5 border-t border-pe-gray-100 hover:bg-pe-gray-50"
                   >
-                    <label className="text-sm text-pe-text-primary truncate inline-flex items-center">
+                    <label htmlFor={`field-${income.name}`} className="text-sm text-pe-text-primary truncate inline-flex items-center">
                       {income.label}
                       {INPUT_DEFINITIONS[income.name] && <InfoTooltip definition={INPUT_DEFINITIONS[income.name]} />}
                     </label>
                     <div className="relative">
                       <span className="absolute left-2 top-1/2 -translate-y-1/2 text-pe-text-tertiary text-xs">$</span>
                       <input
+                        id={`field-${income.name}`}
                         type="number"
                         value={inputs[income.name] ?? 0}
                         onChange={(e) => handleChange(income.name, parseFloat(e.target.value) || 0)}
@@ -1208,10 +1221,11 @@ export default function CalculatorView() {
                     <div className="flex justify-center">
                       {qualified && (
                         <input
+                          id={`field-${qualified.name}`}
                           type="checkbox"
                           checked={inputs[qualified.name] ?? true}
                           onChange={(e) => handleChange(qualified.name, e.target.checked)}
-                          title="Qualified business income"
+                          aria-label={`${income.label} is a qualified trade or business`}
                           className="rounded border-pe-gray-300 text-pe-teal-500 focus:ring-pe-teal-500"
                         />
                       )}
@@ -1254,13 +1268,14 @@ export default function CalculatorView() {
                         key={def.name}
                         className="grid grid-cols-[1fr_140px] gap-2 items-center px-3 py-1.5 border-t first:border-t-0 border-pe-gray-100 hover:bg-pe-gray-50"
                       >
-                        <label className="text-sm text-pe-text-primary inline-flex items-center">
+                        <label htmlFor={`field-${def.name}`} className="text-sm text-pe-text-primary inline-flex items-center">
                           {def.label}
                           {INPUT_DEFINITIONS[def.name] && <InfoTooltip definition={INPUT_DEFINITIONS[def.name]} />}
                         </label>
                         <div className="relative">
                           <span className="absolute left-2 top-1/2 -translate-y-1/2 text-pe-text-tertiary text-xs">$</span>
                           <input
+                            id={`field-${def.name}`}
                             type="number"
                             value={inputs[def.name] ?? 0}
                             onChange={(e) => handleChange(def.name, parseFloat(e.target.value) || 0)}
@@ -1296,7 +1311,7 @@ export default function CalculatorView() {
         {/* Sticky calculate button */}
         <div className="sticky bottom-0 bg-white border-t border-pe-gray-200 p-4">
           <button
-            onClick={handleCalculate}
+            type="submit"
             disabled={loading}
             className="w-full py-2.5 bg-pe-teal-500 text-white rounded-pe-lg font-medium hover:bg-pe-teal-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
           >
@@ -1319,10 +1334,26 @@ export default function CalculatorView() {
             {loading ? 'Computing…' : 'Calculate QBID'}
           </button>
         </div>
-      </div>
+        </form>
+      </aside>
 
       {/* Right: Results */}
-      <div className="flex-1 overflow-y-auto p-8">
+      <section aria-label="Calculation results" className="flex-1 overflow-y-auto p-8">
+        {/* Page intro — visible above the diagram, indexable on first paint. */}
+        <div className="max-w-6xl mx-auto mb-6">
+          <h2 className="text-xl font-semibold text-pe-text-primary mb-2">
+            Free QBI Deduction Calculator (IRC §199A)
+          </h2>
+          <p className="text-sm text-pe-text-secondary leading-relaxed">
+            Enter your filing status, taxable income, and qualified business
+            income on the left. The diagram below traces the full §199A
+            computation — including the §199A(b)(3)(B) phase-in,
+            §199A(b)(2)(B) wage and UBIA caps, SSTB phase-out under
+            §199A(d)(3), and the flat 20% deduction on REIT and PTP
+            income — using <a className="text-pe-teal-600 hover:underline" href="https://policyengine.org/us" target="_blank" rel="noopener noreferrer">PolicyEngine US</a>.
+          </p>
+        </div>
+
         {error && (
           <div className="max-w-6xl mx-auto mb-6 p-4 bg-red-50 border border-pe-error/20 rounded-pe-lg text-pe-error text-sm">
             {error}
@@ -1412,7 +1443,109 @@ export default function CalculatorView() {
               </div>
             );
           })()}
-      </div>
+
+        {/* FAQ — keyword-rich content for indexability. Mirrors the
+            FAQPage JSON-LD in index.html so the on-page text and the
+            structured data agree. */}
+        <div className="max-w-6xl mx-auto mt-12 pt-8 border-t border-pe-gray-200">
+          <h2 className="text-xl font-semibold text-pe-text-primary mb-4">
+            Frequently asked questions
+          </h2>
+          <div className="space-y-4 text-sm text-pe-text-secondary leading-relaxed">
+            <details className="group">
+              <summary className="cursor-pointer font-medium text-pe-text-primary group-open:mb-2 list-none flex items-center gap-2">
+                <Chevron open={false} />
+                <span>What is the QBI deduction?</span>
+              </summary>
+              <p className="pl-6">
+                The Qualified Business Income (QBI) deduction is a 20%
+                deduction on net income from pass-through businesses
+                created by IRC §199A. It is available to sole proprietors,
+                partnerships, S-corporations, and certain trusts and
+                estates.
+              </p>
+            </details>
+            <details className="group">
+              <summary className="cursor-pointer font-medium text-pe-text-primary group-open:mb-2 list-none flex items-center gap-2">
+                <Chevron open={false} />
+                <span>Who qualifies for the §199A deduction?</span>
+              </summary>
+              <p className="pl-6">
+                Owners of a qualified trade or business — a §162 trade or
+                business other than the trade or business of being an
+                employee — with taxable income above zero. Above the
+                §199A(e) threshold, additional W-2 wage and UBIA
+                limitations apply, and Specified Service Trades or
+                Businesses (SSTBs) phase out.
+              </p>
+            </details>
+            <details className="group">
+              <summary className="cursor-pointer font-medium text-pe-text-primary group-open:mb-2 list-none flex items-center gap-2">
+                <Chevron open={false} />
+                <span>What is an SSTB?</span>
+              </summary>
+              <p className="pl-6">
+                A Specified Service Trade or Business under §199A(d)(2) —
+                health, law, accounting, actuarial, performing arts,
+                consulting, athletics, financial / brokerage services,
+                investing, or any business whose principal asset is the
+                reputation or skill of its owners. SSTB income phases out
+                above the §199A threshold.
+              </p>
+            </details>
+            <details className="group">
+              <summary className="cursor-pointer font-medium text-pe-text-primary group-open:mb-2 list-none flex items-center gap-2">
+                <Chevron open={false} />
+                <span>What are the W-2 wage and UBIA limits?</span>
+              </summary>
+              <p className="pl-6">
+                Above the threshold, the QBI component for each business
+                is capped at the greater of (a) 50% of W-2 wages paid by
+                the business, or (b) 25% of W-2 wages plus 2.5% of the
+                unadjusted basis immediately after acquisition (UBIA) of
+                qualified property — see §199A(b)(2)(B).
+              </p>
+            </details>
+            <details className="group">
+              <summary className="cursor-pointer font-medium text-pe-text-primary group-open:mb-2 list-none flex items-center gap-2">
+                <Chevron open={false} />
+                <span>What is the difference between Form 8995 and Form 8995-A?</span>
+              </summary>
+              <p className="pl-6">
+                Form 8995 is the simplified form for filers with taxable
+                income below the §199A threshold. Form 8995-A is the
+                longer form required when taxable income exceeds the
+                threshold and the wage / UBIA limits or SSTB phase-out
+                apply.
+              </p>
+            </details>
+          </div>
+        </div>
+
+        <footer className="max-w-6xl mx-auto mt-12 pt-6 border-t border-pe-gray-200 text-xs text-pe-text-tertiary">
+          <p>
+            Built by{' '}
+            <a
+              href="https://policyengine.org/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-pe-teal-600 hover:underline"
+            >
+              PolicyEngine
+            </a>
+            . Source on{' '}
+            <a
+              href="https://github.com/PolicyEngine/qbi-visualizer"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-pe-teal-600 hover:underline"
+            >
+              GitHub
+            </a>
+            . This is an informational tool, not tax advice.
+          </p>
+        </footer>
+      </section>
     </div>
   );
 }
