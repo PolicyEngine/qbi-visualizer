@@ -706,7 +706,6 @@ function BoxLineDiagram({
       value: businessComponents,
       formLine: showAfterPhaseInBox ? 'L26' : 'L28',
       kind: 'op',
-      binds: true,
     });
   }
 
