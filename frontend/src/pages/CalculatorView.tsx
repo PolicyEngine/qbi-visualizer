@@ -333,7 +333,10 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
   const W = 1120;
   const BW = 150; // box width
   const BH = 52;  // box height
-  const WAGE_CAP_X = 950;
+  // When the wage-cap area is shown, it lives on the LEFT and pushes the
+  // rest of the diagram to the right by 160px.
+  const SHIFT = showWageCap ? 160 : 0;
+  const WAGE_CAP_X = 10;
   const level0Y = feederAreaH + 10;
   const level1Y = level0Y + 120;
   const level2Y = level1Y + 120;
@@ -343,22 +346,22 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
 
   const boxes: DiagramBox[] = [
     // Level 0 — QBI buckets / TI / capital gain (PolicyEngine outputs)
-    { id: 'non_sstb', x: 10, y: level0Y, w: BW, h: BH, label: 'Non-SSTB QBI', value: nonSstb, formLine: 'L2', kind: 'input' },
-    { id: 'sstb', x: 170, y: level0Y, w: BW, h: BH, label: 'SSTB QBI', value: sstb, formLine: 'L2 (SSTB)', kind: 'input' },
-    { id: 'reit_ptp', x: 330, y: level0Y, w: BW, h: BH, label: 'REIT/PTP income', value: reitPtp, formLine: 'L6', kind: 'input' },
-    { id: 'ti', x: 490, y: level0Y, w: BW, h: BH, label: 'Taxable income', value: tiBefore, formLine: 'L11', kind: 'input' },
-    { id: 'cap_gain', x: 650, y: level0Y, w: BW, h: BH, label: 'Net capital gain', value: netCapGain, formLine: 'L12', kind: 'input' },
+    { id: 'non_sstb', x: 10 + SHIFT, y: level0Y, w: BW, h: BH, label: 'Non-SSTB QBI', value: nonSstb, formLine: 'L2', kind: 'input' },
+    { id: 'sstb', x: 170 + SHIFT, y: level0Y, w: BW, h: BH, label: 'SSTB QBI', value: sstb, formLine: 'L2 (SSTB)', kind: 'input' },
+    { id: 'reit_ptp', x: 330 + SHIFT, y: level0Y, w: BW, h: BH, label: 'REIT/PTP income', value: reitPtp, formLine: 'L6', kind: 'input' },
+    { id: 'ti', x: 490 + SHIFT, y: level0Y, w: BW, h: BH, label: 'Taxable income', value: tiBefore, formLine: 'L11', kind: 'input' },
+    { id: 'cap_gain', x: 650 + SHIFT, y: level0Y, w: BW, h: BH, label: 'Net capital gain', value: netCapGain, formLine: 'L12', kind: 'input' },
     // Level 1 — first ops
-    { id: 'total_qbi', x: 90, y: level1Y, w: BW, h: BH, label: 'Total QBI', value: totalQbi, formLine: 'L4', kind: 'op' },
-    { id: 'ti_less_cg', x: 570, y: level1Y, w: BW, h: BH, label: 'TI − net cap gain', value: tiLessCapGain, formLine: 'L13', kind: 'op' },
+    { id: 'total_qbi', x: 90 + SHIFT, y: level1Y, w: BW, h: BH, label: 'Total QBI', value: totalQbi, formLine: 'L4', kind: 'op' },
+    { id: 'ti_less_cg', x: 570 + SHIFT, y: level1Y, w: BW, h: BH, label: 'TI − net cap gain', value: tiLessCapGain, formLine: 'L13', kind: 'op' },
     // Level 2 — × 20%
-    { id: 'qbi_comp_max', x: 90, y: level2Y, w: BW, h: BH, label: '20% × Total QBI', value: qbiComponentMax, formLine: 'L5', kind: 'op' },
-    { id: 'reit_ptp_comp', x: 330, y: level2Y, w: BW, h: BH, label: '20% × REIT/PTP', value: reitPtpComponent, formLine: 'L9', kind: 'op' },
-    { id: 'income_limit', x: 570, y: level2Y, w: BW, h: BH, label: 'Income limit', value: incomeLimit, formLine: 'L14', kind: 'op', binds: !qbiDeductionBinds },
+    { id: 'qbi_comp_max', x: 90 + SHIFT, y: level2Y, w: BW, h: BH, label: '20% × Total QBI', value: qbiComponentMax, formLine: 'L5', kind: 'op' },
+    { id: 'reit_ptp_comp', x: 330 + SHIFT, y: level2Y, w: BW, h: BH, label: '20% × REIT/PTP', value: reitPtpComponent, formLine: 'L9', kind: 'op' },
+    { id: 'income_limit', x: 570 + SHIFT, y: level2Y, w: BW, h: BH, label: 'Income limit', value: incomeLimit, formLine: 'L14', kind: 'op', binds: !qbiDeductionBinds },
     // Level 3 — sum into QBI deduction
     {
       id: 'qbi_deduction',
-      x: 210,
+      x: 210 + SHIFT,
       y: level3Y,
       w: BW,
       h: reductionFromCaps > 0 ? 68 : BH,
@@ -370,7 +373,7 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
       subtitle: reductionFromCaps > 0 ? `after −${formatCurrency(reductionFromCaps)} wage / SSTB caps` : undefined,
     },
     // Level 4 — final min
-    { id: 'final_qbid', x: 390, y: level4Y, w: 180, h: 60, label: 'Final QBID', value: finalQbid, formLine: 'L15', kind: 'final' },
+    { id: 'final_qbid', x: 390 + SHIFT, y: level4Y, w: 180, h: 60, label: 'Final QBID', value: finalQbid, formLine: 'L15', kind: 'final' },
   ];
 
   // Add feeder boxes (non-zero raw inputs) above their target QBI bucket.
@@ -392,10 +395,10 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
       });
     });
   };
-  addFeederColumn(nonSstbFeeders, 10);
-  addFeederColumn(sstbFeeders, 170);
-  addFeederColumn(capGainFeeders, 650);
-  // Wage / UBIA cap inputs sit above the Wage cap box on the right.
+  addFeederColumn(nonSstbFeeders, 10 + SHIFT);
+  addFeederColumn(sstbFeeders, 170 + SHIFT);
+  addFeederColumn(capGainFeeders, 650 + SHIFT);
+  // Wage / UBIA cap inputs sit above the Wage cap box on the LEFT.
   if (showWageCap) {
     addFeederColumn(wageCapInputs.map((w) => ({ name: w.name, label: w.label, value: w.value, formLine: '§199A(b)(2)' })), WAGE_CAP_X);
   }
@@ -868,13 +871,13 @@ export default function CalculatorView() {
       {/* Right: Results */}
       <div className="flex-1 overflow-y-auto p-8">
         {error && (
-          <div className="max-w-3xl mx-auto mb-6 p-4 bg-red-50 border border-pe-error/20 rounded-pe-lg text-pe-error text-sm">
+          <div className="max-w-6xl mx-auto mb-6 p-4 bg-red-50 border border-pe-error/20 rounded-pe-lg text-pe-error text-sm">
             {error}
           </div>
         )}
 
         {result ? (
-          <div className="max-w-3xl mx-auto">
+          <div className="max-w-6xl mx-auto">
             {/* Primary result */}
             {primaryOutput && (
               <div className="mb-8 bg-white rounded-2xl border border-pe-gray-200 p-8 text-center shadow-sm">
