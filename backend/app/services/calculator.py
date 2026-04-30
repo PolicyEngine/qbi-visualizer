@@ -372,6 +372,16 @@ def calculate(inputs: dict) -> dict:
             "phase_out_length_joint": float(
                 qbi_params.phase_out.length.JOINT(period)
             ),
+            # Filer-specific phase-out start / length for the actual filing
+            # status — used by the frontend to render the §199A(b)(3)(B)
+            # phase-in indicator without re-mapping statuses client-side.
+            # PE parameter breakdowns require attribute access, not [].
+            "phase_out_start": float(
+                getattr(qbi_params.phase_out.start, filing_status)(period)
+            ),
+            "phase_out_length": float(
+                getattr(qbi_params.phase_out.length, filing_status)(period)
+            ),
         }
     except Exception:
         param_values = {}

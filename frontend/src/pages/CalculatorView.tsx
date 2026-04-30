@@ -1,4 +1,6 @@
 import { useState, useCallback } from 'react';
+import { InfoTooltip } from '../components/InfoTooltip';
+import { INPUT_DEFINITIONS, QUALIFIED_FLAG_DEFINITION } from '../data/inputDefinitions';
 
 interface InputDef {
   name: string;
@@ -6,13 +8,6 @@ interface InputDef {
   group: string;
   default: number | boolean;
   type: 'currency' | 'bool';
-}
-
-interface OutputDef {
-  name: string;
-  label: string;
-  entity: string;
-  primary?: boolean;
 }
 
 const INPUT_DEFS: InputDef[] = [
@@ -40,22 +35,6 @@ const INPUT_DEFS: InputDef[] = [
   { name: 'short_term_capital_gains', label: 'Short-term capital gains', group: 'Other Income', default: 0, type: 'currency' },
   { name: 'qualified_dividend_income', label: 'Qualified dividends', group: 'Other Income', default: 0, type: 'currency' },
   { name: 'taxable_interest_income', label: 'Taxable interest', group: 'Other Income', default: 0, type: 'currency' },
-];
-
-const OUTPUT_DEFS: OutputDef[] = [
-  { name: 'qualified_business_income_deduction', label: 'Qualified Business Income Deduction', entity: 'tax_unit', primary: true },
-  { name: 'qualified_business_income', label: 'Non-SSTB qualified business income', entity: 'person' },
-  { name: 'sstb_qualified_business_income', label: 'SSTB qualified business income', entity: 'person' },
-  { name: 'qualified_reit_and_ptp_income', label: 'Qualified REIT dividends and PTP income', entity: 'person' },
-  { name: 'qbid_amount', label: 'Per-person QBID (before TI cap)', entity: 'person' },
-  { name: 'taxable_income_less_qbid', label: 'Taxable income (before QBID)', entity: 'tax_unit' },
-  { name: 'adjusted_net_capital_gain', label: 'Adjusted net capital gain', entity: 'tax_unit' },
-  { name: 'self_employment_tax_ald_person', label: 'SE tax deduction (QBI reduction)', entity: 'person' },
-  { name: 'self_employed_health_insurance_ald_person', label: 'SE health insurance deduction (QBI reduction)', entity: 'person' },
-  { name: 'self_employed_pension_contribution_ald_person', label: 'SE pension deduction (QBI reduction)', entity: 'person' },
-  { name: 'adjusted_gross_income', label: 'Adjusted gross income', entity: 'tax_unit' },
-  { name: 'taxable_income', label: 'Taxable income (after QBID)', entity: 'tax_unit' },
-  { name: 'income_tax_before_credits', label: 'Income tax before credits', entity: 'tax_unit' },
 ];
 
 function getQbiIncomeRows() {
@@ -89,9 +68,6 @@ function getGroups(): GroupDef[] {
 
 const formatCurrency = (val: number) =>
   val.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
-
-const formatCurrencyLarge = (val: number) =>
-  val.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
 const Chevron = ({ open }: { open: boolean }) => (
   <svg
@@ -232,23 +208,44 @@ interface DiagramBox {
   h: number;
   label: string;
   value?: number;
+  valueFormat?: 'currency' | 'percent';
   formLine?: string;
   kind: 'input' | 'op' | 'final';
   binds?: boolean;
   subtitle?: string | string[]; // small line(s) below the value
 }
 
+type BoxSide = 'top' | 'right' | 'bottom' | 'left';
+
 interface DiagramEdge {
   from: string;
   to: string;
   op?: string; // optional inline label, e.g. "×0.20", "−", "MIN"
+  // Anchor sides default to bottom (exit) → top (enter) for top-down
+  // flow. Override when an edge crosses zones and the standard anchors
+  // would push the line through unrelated boxes.
+  exitSide?: BoxSide;
+  enterSide?: BoxSide;
 }
 
-function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<string, any> }) {
+function BoxLineDiagram({
+  outputs,
+  inputs,
+  parameters,
+  stale,
+}: {
+  outputs: Outputs;
+  inputs: Record<string, any>;
+  parameters?: Record<string, number>;
+  stale?: boolean;
+}) {
   const nonSstb = num(outputs, 'qualified_business_income');
   const sstb = num(outputs, 'sstb_qualified_business_income');
   const totalQbi = nonSstb + sstb;
-  const reitPtp = num(outputs, 'qualified_reit_and_ptp_income');
+  // REIT/PTP is a pure input passthrough — read it from inputs directly
+  // so the box reflects what the user typed without waiting for a
+  // calculation round-trip.
+  const reitPtp = Number(inputs['qualified_reit_and_ptp_income'] ?? 0);
   const qbidAmount = num(outputs, 'qbid_amount');
   const tiBefore = num(outputs, 'taxable_income_less_qbid');
   const netCapGain = num(outputs, 'adjusted_net_capital_gain');
@@ -277,7 +274,7 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
     inputs[`${name}_would_be_qualified`] === true;
   const inputVal = (name: string): number => Number(inputs[name] ?? 0);
 
-  const feedersFor = (target: 'non_sstb' | 'sstb' | 'cap_gain'): Feeder[] => {
+  const feedersFor = (target: 'non_sstb' | 'sstb' | 'cap_gain' | 'ti'): Feeder[] => {
     if (target === 'non_sstb') {
       return [
         { name: 'self_employment_income', label: 'Self-employment', formLine: 'L1' },
@@ -295,10 +292,20 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
         .filter((f) => inputVal(f.name) > 0 && isQualified(f.name))
         .map((f) => ({ ...f, value: inputVal(f.name) }));
     }
-    // cap_gain feeders
+    if (target === 'cap_gain') {
+      return [
+        { name: 'long_term_capital_gains', label: 'Long-term capital gains', formLine: 'L12' },
+        { name: 'qualified_dividend_income', label: 'Qualified dividends', formLine: 'L12' },
+      ]
+        .filter((f) => inputVal(f.name) > 0)
+        .map((f) => ({ ...f, value: inputVal(f.name) }));
+    }
+    // ti feeders — non-QBI income that flows into TI alongside the
+    // QBI/cap-gain pieces already shown elsewhere in the diagram.
     return [
-      { name: 'long_term_capital_gains', label: 'Long-term capital gains', formLine: 'L12' },
-      { name: 'qualified_dividend_income', label: 'Qualified dividends', formLine: 'L12' },
+      { name: 'employment_income', label: 'W-2 wages', formLine: '1040 L1' },
+      { name: 'taxable_interest_income', label: 'Interest', formLine: '1040 L2b' },
+      { name: 'short_term_capital_gains', label: 'Short-term gains', formLine: 'Sch D' },
     ]
       .filter((f) => inputVal(f.name) > 0)
       .map((f) => ({ ...f, value: inputVal(f.name) }));
@@ -307,21 +314,51 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
   const nonSstbFeeders = feedersFor('non_sstb');
   const sstbFeeders = feedersFor('sstb');
   const capGainFeeders = feedersFor('cap_gain');
+  const tiFeeders = feedersFor('ti');
 
-  // Wage / UBIA cap area (§199A(b)(2)(B))
-  type WageInput = { name: string; label: string; value: number };
-  const wageCapInputs: WageInput[] = [
-    { name: 'w2_wages_from_qualified_business', label: 'W-2 wages' },
-    { name: 'unadjusted_basis_qualified_property', label: 'UBIA' },
-    { name: 'sstb_w2_wages_from_qualified_business', label: 'SSTB W-2' },
-    { name: 'sstb_unadjusted_basis_qualified_property', label: 'SSTB UBIA' },
-  ]
+  // Wage / UBIA cap area (§199A(b)(2)(B)). Each input has a FIXED grid
+  // position (col 0 = wages, col 1 = property; row 0 = total, row 1 =
+  // SSTB allocable) so users see consistent placement across edits.
+  // Only W-2 wages renders by default; the others appear when non-zero.
+  // If the right column has no entries, the grid collapses to one
+  // column to avoid an empty half.
+  type WageInput = {
+    name: string;
+    label: string;
+    value: number;
+    col: 0 | 1;
+    row: 0 | 1;
+    alwaysShow?: boolean;
+  };
+  const wageCapInputs: WageInput[] = ([
+    { name: 'w2_wages_from_qualified_business', label: 'W-2 wages', col: 0 as const, row: 0 as const, alwaysShow: true },
+    { name: 'unadjusted_basis_qualified_property', label: 'UBIA', col: 1 as const, row: 0 as const },
+    { name: 'sstb_w2_wages_from_qualified_business', label: 'SSTB W-2', col: 0 as const, row: 1 as const },
+    { name: 'sstb_unadjusted_basis_qualified_property', label: 'SSTB UBIA', col: 1 as const, row: 1 as const },
+  ] as Omit<WageInput, 'value'>[])
     .map((f) => ({ ...f, value: inputVal(f.name) }))
-    .filter((f) => f.value > 0);
-  const w2 = inputVal('w2_wages_from_qualified_business');
-  const ubiaVal = inputVal('unadjusted_basis_qualified_property');
-  const wageCap = Math.max(0.50 * w2, 0.25 * w2 + 0.025 * ubiaVal);
-  const showWageCap = wageCapInputs.length > 0;
+    .filter((f) => f.alwaysShow || f.value > 0);
+  // Wage cap is a COMPUTED value, not a raw input — so when the result
+  // is stale (user edited inputs after a calc), zero it out alongside
+  // the other computed boxes. The W-2 / UBIA feeder boxes still show
+  // current input values because they're inputs.
+  const w2 = stale ? 0 : inputVal('w2_wages_from_qualified_business');
+  const ubiaVal = stale ? 0 : inputVal('unadjusted_basis_qualified_property');
+  const wageCap = stale ? 0 : Math.max(0.50 * w2, 0.25 * w2 + 0.025 * ubiaVal);
+  const showWageCap = true; // always show the wage / UBIA cap path
+
+  // §199A(b)(3)(B) phase-in: between threshold and threshold + length the
+  // wage cap binds proportionally. reduction_rate = (TI − threshold) /
+  // length, clamped to [0, 1]. Computed from server-supplied parameters
+  // when available; otherwise undefined (no phase-in viz).
+  const threshold = parameters?.phase_out_start;
+  const phaseInLength = parameters?.phase_out_length;
+  const reductionRate =
+    threshold !== undefined && phaseInLength !== undefined && phaseInLength > 0
+      ? Math.max(0, Math.min(1, (tiBefore - threshold) / phaseInLength))
+      : undefined;
+  const inPhaseIn = reductionRate !== undefined && reductionRate > 0 && reductionRate < 1;
+  const aboveRange = reductionRate !== undefined && reductionRate >= 1;
   // The wage cap is "actually contributing" when the reduction is larger
   // than what SSTB phase-out alone could explain (max SSTB reduction =
   // 20% × SSTB QBI when applicable_rate hits 0). Below threshold this
@@ -335,58 +372,116 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
   // (y=36 baseline) — at 36 the value glyphs were spilling past the bottom.
   const FEEDER_BH = 46;
   const FEEDER_GAP = 8;
+  const BW = 150; // box width
+  const BH = 52;  // box height
+  // Wage / UBIA cap inputs render in a horizontal 2-col grid so users
+  // see them as separate parameters feeding one formula, not a stacked
+  // chain. With 1 input it's 1 box wide; with 2-4 it's 2 boxes wide.
+  const WAGE_HGAP = 10;
+  // Determine which input columns / rows are actually populated so the
+  // input grid collapses cleanly. The alternative boxes (50% × W-2 and
+  // 25% W-2 + 2.5% UBIA) are always rendered side-by-side, so the area
+  // is always at least 2-cells wide regardless of how many inputs there
+  // are — otherwise the right alternative box would collide with the
+  // main diagram's level1 row.
+  const wageCol1Active = wageCapInputs.some((f) => f.col === 1);
+  const wageRow1Active = wageCapInputs.some((f) => f.row === 1);
+  const wageRows = wageRow1Active ? 2 : 1;
+  const ALTS_WIDTH = 2 * BW + WAGE_HGAP;
+  const inputGridWidth = (wageCol1Active ? 2 : 1) * BW + (wageCol1Active ? WAGE_HGAP : 0);
+  const wageGridWidth = showWageCap ? Math.max(ALTS_WIDTH, inputGridWidth) : 0;
+
   const maxFeederStack = Math.max(
     nonSstbFeeders.length,
     sstbFeeders.length,
     capGainFeeders.length,
-    wageCapInputs.length,
+    tiFeeders.length,
+    wageRows,
   );
   const feederAreaH = maxFeederStack > 0 ? maxFeederStack * (FEEDER_BH + FEEDER_GAP) + 24 : 0;
 
-  // Layout grid (top-down). Width is computed dynamically below from the
-  // rightmost rendered box so the diagram fills its container with no
-  // wasted gutters.
-  const BW = 150; // box width
-  const BH = 52;  // box height
-  // When the wage-cap area is shown, it lives on the LEFT and pushes the
-  // rest of the diagram to the right by 160px.
-  const SHIFT = showWageCap ? 160 : 0;
-  const WAGE_CAP_X = 10;
+  // Three vertical zones, left to right:
+  //   1. Income-limit zone — TI / cap gain → ti_less_cg → income limit.
+  //      Always shown; two boxes wide so it matches the standard zone.
+  //   2. Wage-cap zone — only when showWageCap. Houses W-2 / UBIA feeders,
+  //      the 50%/25%+UBIA alternatives, the wage cap node, and the
+  //      Excess / Phase-in stack below it.
+  //   3. QBI zone — non-SSTB / SSTB / REIT-PTP and everything that flows
+  //      into qbi_deduction.
+  // Putting both QBID limitations (income limit, wage cap) to the LEFT of
+  // the QBI side mirrors how they constrain the deduction in §199A.
+  const ZONE_GAP = 30;
+  const INCOME_WIDTH = 2 * BW + WAGE_HGAP;
+  const INCOME_X = 10;
+  const WAGE_X = INCOME_X + INCOME_WIDTH + ZONE_GAP;
+  const WAGE_CAP_X = showWageCap ? WAGE_X + (wageGridWidth - BW) / 2 : WAGE_X;
+  // SHIFT is the extra offset applied to the historical "10 + SHIFT" QBI
+  // box positions so the QBI zone starts where the income / wage zones
+  // leave off.
+  const QBI_X = showWageCap
+    ? WAGE_X + wageGridWidth + ZONE_GAP
+    : INCOME_X + INCOME_WIDTH + ZONE_GAP;
+  const SHIFT = QBI_X - 10;
+  // When the phase-in math binds, an explicit "After phase-in" box (L26)
+  // sits between L5 and qbi_deduction so users can see the post-reduction
+  // value as a node, not a subtitle. That insertion adds one vertical
+  // level of spacing; downstream levels shift down accordingly.
+  const showAfterPhaseInBox = inPhaseIn && wageCapActuallyBinds;
+  // Above the phase-in range the wage cap fully replaces L5; surface the
+  // post-cap value as its own node too so both reduction paths (phase-in
+  // and above-range full cap) land in a labeled box rather than an L5
+  // subtitle. Both cases reuse the qbi_comp_after id.
+  const showAfterCapBox = wageCapActuallyBinds && aboveRange;
+  const showQbiAfterBox = showAfterPhaseInBox || showAfterCapBox;
+  const phaseInExtraSpace = showQbiAfterBox ? 90 : 0;
   const level0Y = feederAreaH + 10;
   const level1Y = level0Y + 120;
   const level2Y = level1Y + 120;
-  const level3Y = level2Y + 130;
+  const afterPhaseInY = level2Y + 130;
+  const level3Y = level2Y + 130 + phaseInExtraSpace;
   const level4Y = level3Y + 130;
   const H = level4Y + 80;
 
   const boxes: DiagramBox[] = [
-    // Level 0 — QBI buckets / TI / capital gain (PolicyEngine outputs)
+    // Level 0 — Income-limit chain (TI / cap gain) on the LEFT, QBI
+    // buckets on the RIGHT. The income-limit chain mirrors the wage-cap
+    // chain that lives further left, so both QBID limitations sit on the
+    // same side of the diagram.
+    // Income zone (far left). cap_gain sits on the OUTER edge and TI on
+    // the INNER edge so TI is closest to the wage / phase-in zone — the
+    // TI → Phase-in rate edge can hop directly across the zone gap.
+    { id: 'cap_gain', x: INCOME_X, y: level0Y, w: BW, h: BH, label: 'Net capital gain', value: netCapGain, formLine: 'L12', kind: 'input' },
+    { id: 'ti', x: INCOME_X + BW + WAGE_HGAP, y: level0Y, w: BW, h: BH, label: 'Taxable income', value: tiBefore, formLine: 'L11', kind: 'input' },
+    // QBI zone (right)
     { id: 'non_sstb', x: 10 + SHIFT, y: level0Y, w: BW, h: BH, label: 'Non-SSTB QBI', value: nonSstb, formLine: 'L2', kind: 'input' },
     { id: 'sstb', x: 170 + SHIFT, y: level0Y, w: BW, h: BH, label: 'SSTB QBI', value: sstb, formLine: 'L2 (SSTB)', kind: 'input' },
     { id: 'reit_ptp', x: 330 + SHIFT, y: level0Y, w: BW, h: BH, label: 'REIT/PTP income', value: reitPtp, formLine: 'L6', kind: 'input' },
-    { id: 'ti', x: 490 + SHIFT, y: level0Y, w: BW, h: BH, label: 'Taxable income', value: tiBefore, formLine: 'L11', kind: 'input' },
-    { id: 'cap_gain', x: 650 + SHIFT, y: level0Y, w: BW, h: BH, label: 'Net capital gain', value: netCapGain, formLine: 'L12', kind: 'input' },
     // Level 1 — first ops
+    { id: 'ti_less_cg', x: INCOME_X + (INCOME_WIDTH - BW) / 2, y: level1Y, w: BW, h: BH, label: 'TI − net cap gain', value: tiLessCapGain, formLine: 'L13', kind: 'op' },
     { id: 'total_qbi', x: 90 + SHIFT, y: level1Y, w: BW, h: BH, label: 'Total QBI', value: totalQbi, formLine: 'L4', kind: 'op' },
-    { id: 'ti_less_cg', x: 570 + SHIFT, y: level1Y, w: BW, h: BH, label: 'TI − net cap gain', value: tiLessCapGain, formLine: 'L13', kind: 'op' },
     // Level 2 — × 20%
     {
       id: 'qbi_comp_max',
       x: 90 + SHIFT,
       y: level2Y,
       w: BW,
-      h: meaningfulReduction ? 68 : BH,
+      h: meaningfulReduction && !showQbiAfterBox ? 68 : BH,
       label: '20% × Total QBI',
       value: qbiComponentMax,
       formLine: 'L5',
       kind: 'op',
-      // When wage caps and/or SSTB phase-out actually trim the QBI side
-      // before it merges into QBI deduction, show the post-cap value
-      // here at the source rather than as a downstream "after caps" note.
-      subtitle: meaningfulReduction ? `→ ${formatCurrency(businessComponents)} after caps` : undefined,
+      // When wage caps and/or SSTB phase-out trim the QBI side before it
+      // merges into QBI deduction, the post-cap value is shown either as
+      // a subtitle here (SSTB-only reduction cases) or as a dedicated
+      // qbi_comp_after box downstream (phase-in or above-range full
+      // cap). Avoid double-display.
+      subtitle:
+        meaningfulReduction && !showQbiAfterBox
+          ? `→ ${formatCurrency(businessComponents)} after caps`
+          : undefined,
     },
     { id: 'reit_ptp_comp', x: 330 + SHIFT, y: level2Y, w: BW, h: BH, label: '20% × REIT/PTP', value: reitPtpComponent, formLine: 'L9', kind: 'op' },
-    { id: 'income_limit', x: 570 + SHIFT, y: level2Y, w: BW, h: BH, label: 'Income limit', value: incomeLimit, formLine: 'L14', kind: 'op', binds: incomeLimitBinds },
+    { id: 'income_limit', x: INCOME_X + (INCOME_WIDTH - BW) / 2, y: level2Y, w: BW, h: BH, label: 'Income limit', value: incomeLimit, formLine: 'L14', kind: 'op', binds: incomeLimitBinds },
     // Level 3 — sum into QBI deduction
     {
       id: 'qbi_deduction',
@@ -401,7 +496,19 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
       binds: qbiDeductionBinds,
     },
     // Level 4 — final min
-    { id: 'final_qbid', x: 390 + SHIFT, y: level4Y, w: 180, h: 60, label: 'Final QBID', value: finalQbid, formLine: 'L15', kind: 'final' },
+    // Center final_qbid between income_limit (left zone) and qbi_deduction
+    // (right zone) since it MIN's the two.
+    {
+      id: 'final_qbid',
+      x: (INCOME_X + INCOME_WIDTH / 2 + 210 + SHIFT + BW / 2) / 2 - 90,
+      y: level4Y,
+      w: 180,
+      h: 60,
+      label: 'Final QBID',
+      value: finalQbid,
+      formLine: 'L15',
+      kind: 'final',
+    },
   ];
 
   // Add feeder boxes (non-zero raw inputs) above their target QBI bucket.
@@ -423,13 +530,27 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
       });
     });
   };
+  addFeederColumn(capGainFeeders, INCOME_X);
+  addFeederColumn(tiFeeders, INCOME_X + BW + WAGE_HGAP);
   addFeederColumn(nonSstbFeeders, 10 + SHIFT);
   addFeederColumn(sstbFeeders, 170 + SHIFT);
-  addFeederColumn(capGainFeeders, 650 + SHIFT);
-  // Wage / UBIA cap inputs sit above the Wage cap box on the LEFT.
-  // No formLine here — these are user inputs, not Form 8995 line items.
+  // Wage cap inputs sit in fixed grid positions: col 0 = wages, col 1
+  // = property; row 0 = total, row 1 = SSTB allocable. Each input
+  // always lands in its own slot regardless of which others are entered.
   if (showWageCap) {
-    addFeederColumn(wageCapInputs.map((w) => ({ name: w.name, label: w.label, value: w.value, formLine: '' })), WAGE_CAP_X);
+    const offsetRows = maxFeederStack - wageRows;
+    wageCapInputs.forEach((f) => {
+      boxes.push({
+        id: `feeder_${f.name}`,
+        x: WAGE_X + f.col * (BW + WAGE_HGAP),
+        y: 10 + (offsetRows + f.row) * (FEEDER_BH + FEEDER_GAP),
+        w: BW,
+        h: FEEDER_BH,
+        label: f.label,
+        value: f.value,
+        kind: 'input',
+      });
+    });
   }
 
   // Tag the Non-SSTB QBI box with the SE-tax / health / retirement
@@ -452,20 +573,142 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
   // value. It connects to L10 with a dashed "caps" edge — the cap only
   // actually binds above the threshold, but surfacing it always lets
   // users see how their W-2 / UBIA inputs relate to the deduction.
+  const wageOnly = 0.50 * w2;
+  const wageUbia = 0.25 * w2 + 0.025 * ubiaVal;
+  const wageOnlyWins = wageOnly >= wageUbia;
   if (showWageCap) {
+    // Form 8995-A Part II breaks the wage cap into two explicit alternatives
+    // — Line 13 (50% × W-2) and Line 16 (25% × W-2 + 2.5% × UBIA). Render
+    // them as their own boxes so users see the comparison upstream of the
+    // max(). A small "max" annotation sits on the merge.
+    const wageCapStatusLine: string | undefined = (() => {
+      if (reductionRate === undefined) {
+        return wageCapActuallyBinds ? undefined : '(not binding here)';
+      }
+      if (reductionRate === 0) return '(below threshold — cap not applied)';
+      if (inPhaseIn) return undefined; // shown in dedicated phase-in box
+      if (aboveRange && wageCap < qbiComponentMax) return '(above range — full cap)';
+      if (wageCap >= qbiComponentMax) return '(not binding here)';
+      return undefined;
+    })();
+
+    // Two alternative boxes positioned at level1Y (between feeders above
+    // and the Wage cap node at level2Y).
+    boxes.push({
+      id: 'wage_alt_50',
+      x: WAGE_X,
+      y: level1Y,
+      w: BW,
+      h: 64,
+      label: 'Wage-only',
+      value: wageOnly,
+      formLine: 'L13',
+      kind: 'op',
+      binds: wageOnlyWins && wageCap > 0,
+      subtitle: ['50% × W-2'],
+    });
+    boxes.push({
+      id: 'wage_alt_25_ubia',
+      x: WAGE_X + BW + WAGE_HGAP,
+      y: level1Y,
+      w: BW,
+      h: 64,
+      label: 'Wage + capital',
+      value: wageUbia,
+      formLine: 'L16',
+      kind: 'op',
+      binds: !wageOnlyWins && wageCap > 0,
+      subtitle: ['25% × W-2 + 2.5% × UBIA'],
+    });
+
+    // Status lines longer than ~22 chars overflow at fontSize 9, so split
+    // an em-dash status into two lines and grow the box accordingly.
+    const wageCapStatusLines: string[] | undefined = (() => {
+      if (!wageCapStatusLine) return undefined;
+      if (wageCapStatusLine.length <= 24) return [wageCapStatusLine];
+      const dashIdx = wageCapStatusLine.indexOf(' — ');
+      if (dashIdx < 0) return [wageCapStatusLine];
+      return [
+        wageCapStatusLine.slice(0, dashIdx + 2),
+        wageCapStatusLine.slice(dashIdx + 3),
+      ];
+    })();
+    const wageCapH = !wageCapStatusLines
+      ? BH
+      : wageCapStatusLines.length > 1
+      ? 76
+      : 64;
     boxes.push({
       id: 'wage_cap',
       x: WAGE_CAP_X,
       y: level2Y,
       w: BW,
-      h: wageCapActuallyBinds ? 84 : 96,
+      h: wageCapH,
       label: 'Wage cap',
       value: wageCap,
-      formLine: '(b)(2)(B)',
+      formLine: 'L17',
       kind: 'op',
-      subtitle: wageCapActuallyBinds
-        ? ['max(50% W-2,', '25% W-2 + 2.5% UBIA)']
-        : ['max(50% W-2,', '25% W-2 + 2.5% UBIA)', '(not binding here)'],
+      subtitle: wageCapStatusLines,
+    });
+
+    // Phase-in stack — three vertically stacked boxes that mirror
+    // Form 8995-A Part III line by line:
+    //   Excess        (L19 − L20): how much QBID exceeds the wage cap
+    //   Phase-in rate (L24/L26)  : (TI − threshold) / phase-in length
+    //   Reduction     (L25/L27)  : Excess × Phase-in rate
+    // The Reduction box's value is what gets subtracted from L5
+    // (qbi_comp_max), so the edge label there just reads "−$X".
+    if (inPhaseIn && reductionRate !== undefined) {
+      const excess = Math.max(0, qbiComponentMax - wageCap);
+      const excessY = level2Y + wageCapH + 24;
+      const phaseY = excessY + 64 + 24;
+      boxes.push({
+        id: 'phase_in_excess',
+        x: WAGE_CAP_X,
+        y: excessY,
+        w: BW,
+        h: 64,
+        label: 'Excess',
+        value: excess,
+        formLine: 'L21',
+        kind: 'op',
+        subtitle: ['L5 − wage cap'],
+      });
+      boxes.push({
+        id: 'phase_in_rate',
+        x: WAGE_CAP_X,
+        y: phaseY,
+        w: BW,
+        h: 80,
+        label: 'Phase-in rate',
+        value: reductionRate * 100,
+        valueFormat: 'percent',
+        formLine: 'L23',
+        kind: 'op',
+        subtitle: [
+          `TI ${formatCurrency(tiBefore)}`,
+          `into ${formatCurrency(threshold!)}–${formatCurrency(threshold! + phaseInLength!)}`,
+        ],
+      });
+    }
+  }
+
+  // After-cap / after-phase-in box: the reduced QBI component value
+  // that flows into qbi_deduction. Sits directly below L5. In the
+  // phase-in case it takes L5 + Phase-in rate as inputs; in the
+  // above-range case it takes L5 + Wage cap (smaller of the two). When
+  // this box is shown, L5 → qbi_deduction is rerouted through it.
+  if (showQbiAfterBox) {
+    boxes.push({
+      id: 'qbi_comp_after',
+      x: 90 + SHIFT,
+      y: afterPhaseInY,
+      w: BW,
+      h: BH,
+      label: showAfterPhaseInBox ? 'After phase-in' : 'After cap',
+      value: businessComponents,
+      formLine: showAfterPhaseInBox ? 'L26' : 'L28',
+      kind: 'op',
     });
   }
 
@@ -476,16 +719,76 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
     ...nonSstbFeeders.map((f, i) => ({ from: `feeder_${f.name}`, to: 'non_sstb', op: i > 0 ? 'Σ' : undefined })),
     ...sstbFeeders.map((f) => ({ from: `feeder_${f.name}`, to: 'sstb' })),
     ...capGainFeeders.map((f, i) => ({ from: `feeder_${f.name}`, to: 'cap_gain', op: i > 0 ? 'Σ' : undefined })),
-    // Wage cap input feeders → Wage cap node. The dashed constraint
-    // edge from Wage cap to the 20% × Total QBI box only renders when
-    // the cap actually reduces the QBI side; below the §199A threshold
-    // the cap exists but doesn't fire, so omitting the edge avoids the
-    // misleading impression that a $500 cap is shrinking $18,587.
+    ...tiFeeders.map((f, i) => ({ from: `feeder_${f.name}`, to: 'ti', op: i > 0 ? 'Σ' : undefined })),
+    // Wage cap routing — feeders go through the 50% W-2 and
+    // 25% W-2 + 2.5% UBIA alternative boxes (Form 8995-A L13 / L16)
+    // before merging at Wage cap (max). SSTB-allocable feeders bypass
+    // the alternatives since they only matter for per-bucket caps.
     ...(showWageCap
       ? [
-          ...wageCapInputs.map((f) => ({ from: `feeder_${f.name}`, to: 'wage_cap' })),
-          ...(wageCapActuallyBinds
-            ? [{ from: 'wage_cap', to: 'qbi_comp_max', op: 'caps' } as DiagramEdge]
+          { from: 'feeder_w2_wages_from_qualified_business', to: 'wage_alt_50' } as DiagramEdge,
+          { from: 'feeder_w2_wages_from_qualified_business', to: 'wage_alt_25_ubia' } as DiagramEdge,
+          ...(inputVal('unadjusted_basis_qualified_property') > 0
+            ? [{ from: 'feeder_unadjusted_basis_qualified_property', to: 'wage_alt_25_ubia' } as DiagramEdge]
+            : []),
+          { from: 'wage_alt_50', to: 'wage_cap' } as DiagramEdge,
+          { from: 'wage_alt_25_ubia', to: 'wage_cap', op: 'max' } as DiagramEdge,
+          ...wageCapInputs
+            .filter((f) => f.name.startsWith('sstb_'))
+            .map((f) => ({ from: `feeder_${f.name}`, to: 'wage_cap' } as DiagramEdge)),
+          // Route the dashed cap path through Excess → Phase-in rate
+          // when the filer is in the §199A(b)(3)(B) phase-in range so
+          // the multiplication that produces the dollar reduction is
+          // visible: Excess × rate = the −$X label landing on L5.
+          ...(wageCapActuallyBinds && inPhaseIn
+            ? [
+                // TI is the basis for the phase-in rate ((TI − threshold)
+                // / phase-in length). Route the edge from TI's right side
+                // into Phase-in rate's left side so it crosses the zone
+                // gap directly without grazing other boxes.
+                {
+                  from: 'ti',
+                  to: 'phase_in_rate',
+                  exitSide: 'right',
+                  enterSide: 'left',
+                } as DiagramEdge,
+                // Both operands of the L5 − wage_cap subtraction feed
+                // the Excess box. L5 (minuend) sits in the QBI zone to
+                // the right, so route its arrow into Excess's right
+                // side rather than its top. wage_cap (subtrahend) is
+                // directly above and uses default top entry with op '−'.
+                {
+                  from: 'qbi_comp_max',
+                  to: 'phase_in_excess',
+                  exitSide: 'left',
+                  enterSide: 'right',
+                } as DiagramEdge,
+                { from: 'wage_cap', to: 'phase_in_excess', op: '−' } as DiagramEdge,
+                { from: 'phase_in_excess', to: 'phase_in_rate', op: '×' } as DiagramEdge,
+                // Phase-in rate × Excess = the reduction landing on the
+                // After-phase-in (L26) box, where L5 also flows in as the
+                // minuend.
+                {
+                  from: 'phase_in_rate',
+                  to: 'qbi_comp_after',
+                  op: `−${formatCurrency(Math.max(0, qbiComponentMax - businessComponents))}`,
+                  exitSide: 'right',
+                  enterSide: 'left',
+                } as DiagramEdge,
+              ]
+            : showAfterCapBox
+            ? [
+                // Above the phase-in range, the wage cap fully replaces
+                // L5: After-cap = min(L5, wage_cap). Both operands feed
+                // the After-cap box from their respective sides.
+                {
+                  from: 'wage_cap',
+                  to: 'qbi_comp_after',
+                  op: 'MIN',
+                  exitSide: 'right',
+                  enterSide: 'left',
+                } as DiagramEdge,
+              ]
             : []),
         ]
       : []),
@@ -498,19 +801,45 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
     { from: 'total_qbi', to: 'qbi_comp_max', op: '×0.20' },
     { from: 'reit_ptp', to: 'reit_ptp_comp', op: '×0.20' },
     { from: 'ti_less_cg', to: 'income_limit', op: '×0.20' },
-    // QBI components → QBI deduction (sum implied by the merge)
-    { from: 'qbi_comp_max', to: 'qbi_deduction' },
+    // QBI components → QBI deduction (sum implied by the merge). When
+    // the after-cap / after-phase-in box exists, route L5 through it
+    // so the post-reduction value flows in instead of the raw L5.
+    ...(showQbiAfterBox
+      ? [
+          { from: 'qbi_comp_max', to: 'qbi_comp_after' } as DiagramEdge,
+          { from: 'qbi_comp_after', to: 'qbi_deduction' } as DiagramEdge,
+        ]
+      : [{ from: 'qbi_comp_max', to: 'qbi_deduction' } as DiagramEdge]),
     { from: 'reit_ptp_comp', to: 'qbi_deduction', op: 'Σ' },
     // Final min
-    { from: 'qbi_deduction', to: 'final_qbid' },
-    { from: 'income_limit', to: 'final_qbid', op: 'MIN' },
+    // Both branches enter Final QBID from their respective sides so the
+    // bezier doesn't overshoot — without side anchors, income_limit's
+    // top-down curve dips into the Phase-in rate box.
+    { from: 'qbi_deduction', to: 'final_qbid', exitSide: 'left', enterSide: 'right' },
+    { from: 'income_limit', to: 'final_qbid', op: 'MIN', exitSide: 'right', enterSide: 'left' },
   ];
 
   const boxById = (id: string) => boxes.find((b) => b.id === id)!;
 
-  // Anchor points on a box
-  const bottom = (b: DiagramBox) => ({ x: b.x + b.w / 2, y: b.y + b.h });
-  const top = (b: DiagramBox) => ({ x: b.x + b.w / 2, y: b.y });
+  // Anchor a point on a given side of a box, and produce a control-point
+  // offset that points OUTWARD from that side (used both for the bezier
+  // tangent and for the marker pull-back at the line end).
+  const anchorOn = (b: DiagramBox, side: BoxSide) => {
+    switch (side) {
+      case 'top': return { x: b.x + b.w / 2, y: b.y };
+      case 'bottom': return { x: b.x + b.w / 2, y: b.y + b.h };
+      case 'left': return { x: b.x, y: b.y + b.h / 2 };
+      case 'right': return { x: b.x + b.w, y: b.y + b.h / 2 };
+    }
+  };
+  const outward = (side: BoxSide, mag: number) => {
+    switch (side) {
+      case 'top': return { x: 0, y: -mag };
+      case 'bottom': return { x: 0, y: mag };
+      case 'left': return { x: -mag, y: 0 };
+      case 'right': return { x: mag, y: 0 };
+    }
+  };
 
   // Tighten the viewBox to the actual content extent so the diagram
   // is centered horizontally within whatever container width Tailwind
@@ -538,21 +867,32 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
         {edges.map((e, i) => {
           const from = boxById(e.from);
           const to = boxById(e.to);
-          const a = bottom(from);
-          const b = top(to);
-          // Smooth cubic curve for vertical-ish flow
-          const dy = b.y - a.y;
-          const cp1 = { x: a.x, y: a.y + dy * 0.5 };
-          const cp2 = { x: b.x, y: b.y - dy * 0.5 };
+          const exitSide: BoxSide = e.exitSide ?? 'bottom';
+          const enterSide: BoxSide = e.enterSide ?? 'top';
+          const a = anchorOn(from, exitSide);
+          const b = anchorOn(to, enterSide);
+          // Tangent magnitude scales with edge length so short edges get
+          // gentle curves and long ones get pronounced ones. Floor at 40
+          // so even tiny edges have a visible bend off the box face.
+          const dist = Math.hypot(b.x - a.x, b.y - a.y);
+          const mag = Math.max(40, dist * 0.4);
+          const o1 = outward(exitSide, mag);
+          const o2 = outward(enterSide, mag);
+          const cp1 = { x: a.x + o1.x, y: a.y + o1.y };
+          const cp2 = { x: b.x + o2.x, y: b.y + o2.y };
+          // Pull the line endpoint back from the box edge by 6px in the
+          // outward direction so the arrow marker sits flush.
+          const pullBack = outward(enterSide, 6);
+          const lineEnd = { x: b.x + pullBack.x, y: b.y + pullBack.y };
           const isFinalEdge = e.to === 'final_qbid';
-          const isConstraint = e.from === 'wage_cap';
+          const isConstraint = e.from === 'wage_cap' || e.from === 'phase_in_rate';
           const stroke = isFinalEdge ? '#319795' : isConstraint ? '#D97706' : '#9CA3AF';
           const marker = isFinalEdge ? 'url(#arrow-teal)' : isConstraint ? 'url(#arrow-amber)' : 'url(#arrow)';
           const opLabelW = e.op && e.op.length > 4 ? Math.max(36, e.op.length * 7) : 36;
           return (
             <g key={i}>
               <path
-                d={`M ${a.x} ${a.y} C ${cp1.x} ${cp1.y}, ${cp2.x} ${cp2.y}, ${b.x} ${b.y - 6}`}
+                d={`M ${a.x} ${a.y} C ${cp1.x} ${cp1.y}, ${cp2.x} ${cp2.y}, ${lineEnd.x} ${lineEnd.y}`}
                 stroke={stroke}
                 strokeWidth={isFinalEdge ? 2 : 1.5}
                 strokeDasharray={isConstraint ? '5 4' : undefined}
@@ -597,21 +937,35 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
               </text>
               {b.value !== undefined && (
                 <text x={b.x + b.w / 2} y={b.y + 36} textAnchor="middle" fontSize="13" fontWeight={600} fill={valueColor} fontFamily="ui-monospace, monospace">
-                  {formatCurrency(b.value)}
+                  {b.valueFormat === 'percent' ? `${b.value.toFixed(1)}%` : formatCurrency(b.value)}
                 </text>
               )}
               {b.subtitle &&
-                (Array.isArray(b.subtitle) ? b.subtitle : [b.subtitle]).map((line, i) => (
-                  <text key={i} x={b.x + b.w / 2} y={b.y + 52 + i * 11} textAnchor="middle" fontSize="9" fill="#9CA3AF">
-                    {line}
-                  </text>
-                ))}
+                (Array.isArray(b.subtitle) ? b.subtitle : [b.subtitle]).map((line, i) => {
+                  // Status notes wrapped in parens — e.g. "(not binding here)" —
+                  // get bolder/darker styling so the user notices them.
+                  const isStatus = line.trim().startsWith('(');
+                  return (
+                    <text
+                      key={i}
+                      x={b.x + b.w / 2}
+                      y={b.y + 52 + i * 11}
+                      textAnchor="middle"
+                      fontSize="9"
+                      fill={isStatus ? '#374151' : '#9CA3AF'}
+                      fontWeight={isStatus ? 600 : 400}
+                    >
+                      {line}
+                    </text>
+                  );
+                })}
               {b.binds && b.kind !== 'final' && (
                 <text x={b.x + b.w - 4} y={b.y + 11} textAnchor="end" fontSize="8" fill="#319795" fontWeight={700}>★ BINDS</text>
               )}
             </g>
           );
         })}
+
       </svg>
     </div>
   );
@@ -740,7 +1094,6 @@ export default function CalculatorView() {
 
   const qbiIncomeRows = getQbiIncomeRows();
   const otherGroups = getGroups();
-  const primaryOutput = result ? OUTPUT_DEFS.find((o) => o.primary) : null;
 
   const qbiDefs = INPUT_DEFS.filter((d) => d.group === 'QBI Income Sources');
 
@@ -752,8 +1105,9 @@ export default function CalculatorView() {
           {/* Filing Status & Year — always visible */}
           <div className="grid grid-cols-3 gap-3 mb-4">
             <div className="col-span-2">
-              <label className="block text-xs font-medium text-pe-text-tertiary mb-1">
+              <label className="flex items-center text-xs font-medium text-pe-text-tertiary mb-1">
                 Filing status
+                <InfoTooltip definition={INPUT_DEFINITIONS.filing_status} />
               </label>
               <select
                 value={inputs.filing_status}
@@ -768,8 +1122,9 @@ export default function CalculatorView() {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-pe-text-tertiary mb-1">
+              <label className="flex items-center text-xs font-medium text-pe-text-tertiary mb-1">
                 Tax year
+                <InfoTooltip definition={INPUT_DEFINITIONS.year} />
               </label>
               <select
                 value={inputs.year}
@@ -806,15 +1161,21 @@ export default function CalculatorView() {
                 {/* Header row */}
                 <div className="grid grid-cols-[1fr_140px_72px] gap-1 px-3 py-1 border-t border-pe-gray-100 text-[10px] text-pe-text-tertiary uppercase tracking-wider">
                   <span>Source</span>
-                  <span className="text-right">Amount</span>
-                  <span className="text-center">Qualified</span>
+                  <span>Amount</span>
+                  <span className="text-center inline-flex items-center justify-center">
+                    Qualified
+                    <InfoTooltip definition={QUALIFIED_FLAG_DEFINITION} />
+                  </span>
                 </div>
                 {qbiIncomeRows.map(({ income, qualified }) => (
                   <div
                     key={income.name}
                     className="grid grid-cols-[1fr_140px_72px] gap-1 items-center px-3 py-1.5 border-t border-pe-gray-100 hover:bg-pe-gray-50"
                   >
-                    <label className="text-sm text-pe-text-primary truncate">{income.label}</label>
+                    <label className="text-sm text-pe-text-primary truncate inline-flex items-center">
+                      {income.label}
+                      {INPUT_DEFINITIONS[income.name] && <InfoTooltip definition={INPUT_DEFINITIONS[income.name]} />}
+                    </label>
                     <div className="relative">
                       <span className="absolute left-2 top-1/2 -translate-y-1/2 text-pe-text-tertiary text-xs">$</span>
                       <input
@@ -873,7 +1234,10 @@ export default function CalculatorView() {
                         key={def.name}
                         className="grid grid-cols-[1fr_140px] gap-2 items-center px-3 py-1.5 border-t first:border-t-0 border-pe-gray-100 hover:bg-pe-gray-50"
                       >
-                        <label className="text-sm text-pe-text-primary">{def.label}</label>
+                        <label className="text-sm text-pe-text-primary inline-flex items-center">
+                          {def.label}
+                          {INPUT_DEFINITIONS[def.name] && <InfoTooltip definition={INPUT_DEFINITIONS[def.name]} />}
+                        </label>
                         <div className="relative">
                           <span className="absolute left-2 top-1/2 -translate-y-1/2 text-pe-text-tertiary text-xs">$</span>
                           <input
@@ -896,7 +1260,10 @@ export default function CalculatorView() {
                           onChange={(e) => handleChange(def.name, e.target.checked)}
                           className="rounded border-pe-gray-300 text-pe-teal-500 focus:ring-pe-teal-500"
                         />
-                        <span className="text-sm text-pe-text-primary">{def.label}</span>
+                        <span className="text-sm text-pe-text-primary inline-flex items-center">
+                          {def.label}
+                          {def.name.endsWith('_would_be_qualified') && <InfoTooltip definition={QUALIFIED_FLAG_DEFINITION} />}
+                        </span>
                       </label>
                     ))}
                   </div>
@@ -938,23 +1305,6 @@ export default function CalculatorView() {
                   </div>
                 )}
 
-                {/* Primary result */}
-                {primaryOutput && (
-                  <div className={`mb-8 bg-white rounded-2xl border border-pe-gray-200 p-8 text-center shadow-sm ${isStale ? 'opacity-60' : ''}`}>
-                    <div className="text-sm text-pe-text-secondary mb-2">{primaryOutput.label}</div>
-                    <div className={`text-5xl font-bold ${isStale ? 'text-pe-gray-300' : 'text-pe-teal-500'}`}>
-                      {isStale
-                        ? '—'
-                        : typeof result!.outputs[primaryOutput.name] === 'number'
-                        ? formatCurrencyLarge(result!.outputs[primaryOutput.name] as number)
-                        : '$0'}
-                    </div>
-                    <div className="mt-3 text-sm text-pe-text-tertiary">
-                      {(result?.filing_status ?? inputs.filing_status).replace(/_/g, ' ').toLowerCase()} &middot; Tax year {result?.year ?? inputs.year}
-                    </div>
-                  </div>
-                )}
-
                 {/* Tabs: numerical breakdown vs computation graph */}
                 <div className="mb-3 flex items-center gap-1 bg-pe-gray-100 p-1 rounded-pe-lg w-fit">
                   {[
@@ -978,7 +1328,7 @@ export default function CalculatorView() {
                 {resultTab === 'breakdown' ? (
                   <BreakdownStaged outputs={displayOutputs} />
                 ) : (
-                  <BoxLineDiagram outputs={displayOutputs} inputs={inputs} />
+                  <BoxLineDiagram outputs={displayOutputs} inputs={inputs} parameters={result?.parameters} stale={isStale} />
                 )}
 
                 {/* Parameters Used — collapsible (hidden when stale) */}
