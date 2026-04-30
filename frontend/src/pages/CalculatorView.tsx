@@ -604,7 +604,7 @@ function BoxLineDiagram({
       h: wageCapH,
       label: 'Wage cap',
       value: wageCap,
-      formLine: '(b)(2)(B)',
+      formLine: 'L17',
       kind: 'op',
       subtitle: wageCapStatusLines,
     });
