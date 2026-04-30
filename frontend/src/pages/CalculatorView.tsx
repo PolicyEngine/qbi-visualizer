@@ -339,23 +339,29 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
   // (y=36 baseline) — at 36 the value glyphs were spilling past the bottom.
   const FEEDER_BH = 46;
   const FEEDER_GAP = 8;
+  const BW = 150; // box width
+  const BH = 52;  // box height
+  // Wage / UBIA cap inputs render in a horizontal 2-col grid so users
+  // see them as separate parameters feeding one formula, not a stacked
+  // chain. With 1 input it's 1 box wide; with 2-4 it's 2 boxes wide.
+  const WAGE_HGAP = 10;
+  const wageCols = Math.min(Math.max(wageCapInputs.length, 1), 2);
+  const wageRows = Math.max(1, Math.ceil(wageCapInputs.length / 2));
+  const wageGridWidth = wageCols * BW + (wageCols - 1) * WAGE_HGAP;
+
   const maxFeederStack = Math.max(
     nonSstbFeeders.length,
     sstbFeeders.length,
     capGainFeeders.length,
-    wageCapInputs.length,
+    wageRows,
   );
   const feederAreaH = maxFeederStack > 0 ? maxFeederStack * (FEEDER_BH + FEEDER_GAP) + 24 : 0;
 
-  // Layout grid (top-down). Width is computed dynamically below from the
-  // rightmost rendered box so the diagram fills its container with no
-  // wasted gutters.
-  const BW = 150; // box width
-  const BH = 52;  // box height
-  // When the wage-cap area is shown, it lives on the LEFT and pushes the
-  // rest of the diagram to the right by 160px.
-  const SHIFT = showWageCap ? 160 : 0;
-  const WAGE_CAP_X = 10;
+  // The wage cap area lives on the LEFT and shifts everything else right
+  // by its width plus 30px padding. Wage cap node sits centered below
+  // the input grid.
+  const SHIFT = showWageCap ? wageGridWidth + 30 : 0;
+  const WAGE_CAP_X = showWageCap ? 10 + (wageGridWidth - BW) / 2 : 10;
   const level0Y = feederAreaH + 10;
   const level1Y = level0Y + 120;
   const level2Y = level1Y + 120;
@@ -430,10 +436,25 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
   addFeederColumn(nonSstbFeeders, 10 + SHIFT);
   addFeederColumn(sstbFeeders, 170 + SHIFT);
   addFeederColumn(capGainFeeders, 650 + SHIFT);
-  // Wage / UBIA cap inputs sit above the Wage cap box on the LEFT.
-  // No formLine here — these are user inputs, not Form 8995 line items.
+  // Wage cap inputs lay out in a horizontal 2-col grid (W-2 next to UBIA,
+  // SSTB W-2 next to SSTB UBIA below) so it's visually clear they're
+  // separate parameters of one formula, not a vertical chain.
   if (showWageCap) {
-    addFeederColumn(wageCapInputs.map((w) => ({ name: w.name, label: w.label, value: w.value, formLine: '' })), WAGE_CAP_X);
+    const offsetRows = maxFeederStack - wageRows;
+    wageCapInputs.forEach((f, i) => {
+      const col = i % 2;
+      const row = Math.floor(i / 2);
+      boxes.push({
+        id: `feeder_${f.name}`,
+        x: 10 + col * (BW + WAGE_HGAP),
+        y: 10 + (offsetRows + row) * (FEEDER_BH + FEEDER_GAP),
+        w: BW,
+        h: FEEDER_BH,
+        label: f.label,
+        value: f.value,
+        kind: 'input',
+      });
+    });
   }
 
   // Tag the Non-SSTB QBI box with the SE-tax / health / retirement
