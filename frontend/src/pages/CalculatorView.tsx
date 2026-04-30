@@ -424,7 +424,13 @@ function BoxLineDiagram({
   // value as a node, not a subtitle. That insertion adds one vertical
   // level of spacing; downstream levels shift down accordingly.
   const showAfterPhaseInBox = inPhaseIn && wageCapActuallyBinds;
-  const phaseInExtraSpace = showAfterPhaseInBox ? 90 : 0;
+  // Above the phase-in range the wage cap fully replaces L5; surface the
+  // post-cap value as its own node too so both reduction paths (phase-in
+  // and above-range full cap) land in a labeled box rather than an L5
+  // subtitle. Both cases reuse the qbi_comp_after id.
+  const showAfterCapBox = wageCapActuallyBinds && aboveRange;
+  const showQbiAfterBox = showAfterPhaseInBox || showAfterCapBox;
+  const phaseInExtraSpace = showQbiAfterBox ? 90 : 0;
   const level0Y = feederAreaH + 10;
   const level1Y = level0Y + 120;
   const level2Y = level1Y + 120;
@@ -456,17 +462,18 @@ function BoxLineDiagram({
       x: 90 + SHIFT,
       y: level2Y,
       w: BW,
-      h: meaningfulReduction && !showAfterPhaseInBox ? 68 : BH,
+      h: meaningfulReduction && !showQbiAfterBox ? 68 : BH,
       label: '20% × Total QBI',
       value: qbiComponentMax,
       formLine: 'L5',
       kind: 'op',
       // When wage caps and/or SSTB phase-out trim the QBI side before it
       // merges into QBI deduction, the post-cap value is shown either as
-      // a subtitle here (non-phase-in cases) or as a dedicated "After
-      // phase-in" box downstream (phase-in case). Avoid double-display.
+      // a subtitle here (SSTB-only reduction cases) or as a dedicated
+      // qbi_comp_after box downstream (phase-in or above-range full
+      // cap). Avoid double-display.
       subtitle:
-        meaningfulReduction && !showAfterPhaseInBox
+        meaningfulReduction && !showQbiAfterBox
           ? `→ ${formatCurrency(businessComponents)} after caps`
           : undefined,
     },
@@ -683,21 +690,21 @@ function BoxLineDiagram({
     }
   }
 
-  // After-phase-in box (Form 8995-A Part III L26): the reduced QBI
-  // component value that flows into qbi_deduction. Sits directly below L5
-  // and takes L5 + Phase-in rate as inputs (the reduction lives on the
-  // edge from phase_in_rate). When this box is shown, L5 → qbi_deduction
-  // is rerouted through it.
-  if (showAfterPhaseInBox) {
+  // After-cap / after-phase-in box: the reduced QBI component value
+  // that flows into qbi_deduction. Sits directly below L5. In the
+  // phase-in case it takes L5 + Phase-in rate as inputs; in the
+  // above-range case it takes L5 + Wage cap (smaller of the two). When
+  // this box is shown, L5 → qbi_deduction is rerouted through it.
+  if (showQbiAfterBox) {
     boxes.push({
       id: 'qbi_comp_after',
       x: 90 + SHIFT,
       y: afterPhaseInY,
       w: BW,
       h: BH,
-      label: 'After phase-in',
+      label: showAfterPhaseInBox ? 'After phase-in' : 'After cap',
       value: businessComponents,
-      formLine: 'L26',
+      formLine: showAfterPhaseInBox ? 'L26' : 'L28',
       kind: 'op',
       binds: true,
     });
@@ -767,8 +774,19 @@ function BoxLineDiagram({
                   enterSide: 'left',
                 } as DiagramEdge,
               ]
-            : wageCapActuallyBinds
-            ? [{ from: 'wage_cap', to: 'qbi_comp_max', op: 'caps' } as DiagramEdge]
+            : showAfterCapBox
+            ? [
+                // Above the phase-in range, the wage cap fully replaces
+                // L5: After-cap = min(L5, wage_cap). Both operands feed
+                // the After-cap box from their respective sides.
+                {
+                  from: 'wage_cap',
+                  to: 'qbi_comp_after',
+                  op: 'MIN',
+                  exitSide: 'right',
+                  enterSide: 'left',
+                } as DiagramEdge,
+              ]
             : []),
         ]
       : []),
@@ -782,9 +800,9 @@ function BoxLineDiagram({
     { from: 'reit_ptp', to: 'reit_ptp_comp', op: '×0.20' },
     { from: 'ti_less_cg', to: 'income_limit', op: '×0.20' },
     // QBI components → QBI deduction (sum implied by the merge). When
-    // the phase-in box exists, route L5 through it so the post-reduction
-    // value flows in instead of the raw L5.
-    ...(showAfterPhaseInBox
+    // the after-cap / after-phase-in box exists, route L5 through it
+    // so the post-reduction value flows in instead of the raw L5.
+    ...(showQbiAfterBox
       ? [
           { from: 'qbi_comp_max', to: 'qbi_comp_after' } as DiagramEdge,
           { from: 'qbi_comp_after', to: 'qbi_deduction' } as DiagramEdge,
