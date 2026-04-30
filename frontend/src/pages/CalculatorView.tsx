@@ -1,4 +1,6 @@
 import { useState, useCallback } from 'react';
+import { InfoTooltip } from '../components/InfoTooltip';
+import { INPUT_DEFINITIONS, QUALIFIED_FLAG_DEFINITION } from '../data/inputDefinitions';
 
 interface InputDef {
   name: string;
@@ -752,8 +754,9 @@ export default function CalculatorView() {
           {/* Filing Status & Year — always visible */}
           <div className="grid grid-cols-3 gap-3 mb-4">
             <div className="col-span-2">
-              <label className="block text-xs font-medium text-pe-text-tertiary mb-1">
+              <label className="flex items-center text-xs font-medium text-pe-text-tertiary mb-1">
                 Filing status
+                <InfoTooltip definition={INPUT_DEFINITIONS.filing_status} />
               </label>
               <select
                 value={inputs.filing_status}
@@ -768,8 +771,9 @@ export default function CalculatorView() {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-pe-text-tertiary mb-1">
+              <label className="flex items-center text-xs font-medium text-pe-text-tertiary mb-1">
                 Tax year
+                <InfoTooltip definition={INPUT_DEFINITIONS.year} />
               </label>
               <select
                 value={inputs.year}
@@ -807,14 +811,20 @@ export default function CalculatorView() {
                 <div className="grid grid-cols-[1fr_140px_72px] gap-1 px-3 py-1 border-t border-pe-gray-100 text-[10px] text-pe-text-tertiary uppercase tracking-wider">
                   <span>Source</span>
                   <span className="text-right">Amount</span>
-                  <span className="text-center">Qualified</span>
+                  <span className="text-center inline-flex items-center justify-center">
+                    Qualified
+                    <InfoTooltip definition={QUALIFIED_FLAG_DEFINITION} />
+                  </span>
                 </div>
                 {qbiIncomeRows.map(({ income, qualified }) => (
                   <div
                     key={income.name}
                     className="grid grid-cols-[1fr_140px_72px] gap-1 items-center px-3 py-1.5 border-t border-pe-gray-100 hover:bg-pe-gray-50"
                   >
-                    <label className="text-sm text-pe-text-primary truncate">{income.label}</label>
+                    <label className="text-sm text-pe-text-primary truncate inline-flex items-center">
+                      {income.label}
+                      {INPUT_DEFINITIONS[income.name] && <InfoTooltip definition={INPUT_DEFINITIONS[income.name]} />}
+                    </label>
                     <div className="relative">
                       <span className="absolute left-2 top-1/2 -translate-y-1/2 text-pe-text-tertiary text-xs">$</span>
                       <input
@@ -873,7 +883,10 @@ export default function CalculatorView() {
                         key={def.name}
                         className="grid grid-cols-[1fr_140px] gap-2 items-center px-3 py-1.5 border-t first:border-t-0 border-pe-gray-100 hover:bg-pe-gray-50"
                       >
-                        <label className="text-sm text-pe-text-primary">{def.label}</label>
+                        <label className="text-sm text-pe-text-primary inline-flex items-center">
+                          {def.label}
+                          {INPUT_DEFINITIONS[def.name] && <InfoTooltip definition={INPUT_DEFINITIONS[def.name]} />}
+                        </label>
                         <div className="relative">
                           <span className="absolute left-2 top-1/2 -translate-y-1/2 text-pe-text-tertiary text-xs">$</span>
                           <input
@@ -896,7 +909,10 @@ export default function CalculatorView() {
                           onChange={(e) => handleChange(def.name, e.target.checked)}
                           className="rounded border-pe-gray-300 text-pe-teal-500 focus:ring-pe-teal-500"
                         />
-                        <span className="text-sm text-pe-text-primary">{def.label}</span>
+                        <span className="text-sm text-pe-text-primary inline-flex items-center">
+                          {def.label}
+                          {def.name.endsWith('_would_be_qualified') && <InfoTooltip definition={QUALIFIED_FLAG_DEFINITION} />}
+                        </span>
                       </label>
                     ))}
                   </div>
