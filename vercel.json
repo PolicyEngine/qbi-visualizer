@@ -5,7 +5,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://REPLACE-WITH-MODAL-URL.modal.run/api/:path*"
+      "destination": "https://policyengine--qbi-visualizer-backend-web.modal.run/api/:path*"
     }
   ]
 }
