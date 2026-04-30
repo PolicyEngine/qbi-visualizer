@@ -559,24 +559,26 @@ function BoxLineDiagram({
       x: 10,
       y: level1Y,
       w: BW,
-      h: BH,
-      label: '50% × W-2',
+      h: 64,
+      label: 'Wage-only',
       value: wageOnly,
       formLine: 'L13',
       kind: 'op',
       binds: wageOnlyWins && wageCap > 0,
+      subtitle: ['50% × W-2'],
     });
     boxes.push({
       id: 'wage_alt_25_ubia',
       x: 10 + BW + WAGE_HGAP,
       y: level1Y,
       w: BW,
-      h: BH,
-      label: '25% W-2 + 2.5% UBIA',
+      h: 64,
+      label: 'Wage + capital',
       value: wageUbia,
       formLine: 'L16',
       kind: 'op',
       binds: !wageOnlyWins && wageCap > 0,
+      subtitle: ['25% × W-2 + 2.5% × UBIA'],
     });
 
     // Status lines longer than ~22 chars overflow at fontSize 9, so split
