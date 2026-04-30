@@ -591,28 +591,25 @@ function BoxLineDiagram({
     if (inPhaseIn && reductionRate !== undefined) {
       const wageCapH = wageCapStatusLine ? 64 : BH;
       const excess = Math.max(0, qbiComponentMax - wageCap);
-      const EXCESS_H = 64;
-      const PHASE_H = 80;
       const excessY = level2Y + wageCapH + 24;
-      const phaseY = excessY + EXCESS_H + 18;
+      const phaseY = excessY + BH + 24;
       boxes.push({
         id: 'phase_in_excess',
         x: WAGE_CAP_X,
         y: excessY,
         w: BW,
-        h: EXCESS_H,
+        h: BH,
         label: 'Excess',
         value: excess,
         formLine: 'L21',
         kind: 'op',
-        subtitle: ['L5 − wage cap'],
       });
       boxes.push({
         id: 'phase_in_rate',
         x: WAGE_CAP_X,
         y: phaseY,
         w: BW,
-        h: PHASE_H,
+        h: 80,
         label: 'Phase-in rate',
         value: reductionRate * 100,
         valueFormat: 'percent',
@@ -655,7 +652,11 @@ function BoxLineDiagram({
           // visible: Excess × rate = the −$X label landing on L5.
           ...(wageCapActuallyBinds && inPhaseIn
             ? [
-                { from: 'wage_cap', to: 'phase_in_excess', op: 'L5 −' } as DiagramEdge,
+                // Both operands of the L5 − wage_cap subtraction feed
+                // the Excess box. L5 is the minuend (no op label),
+                // wage_cap is the subtrahend (op '−').
+                { from: 'qbi_comp_max', to: 'phase_in_excess' } as DiagramEdge,
+                { from: 'wage_cap', to: 'phase_in_excess', op: '−' } as DiagramEdge,
                 { from: 'phase_in_excess', to: 'phase_in_rate', op: '×' } as DiagramEdge,
                 {
                   from: 'phase_in_rate',
