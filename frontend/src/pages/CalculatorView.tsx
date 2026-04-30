@@ -383,13 +383,18 @@ function BoxLineDiagram({
   // see them as separate parameters feeding one formula, not a stacked
   // chain. With 1 input it's 1 box wide; with 2-4 it's 2 boxes wide.
   const WAGE_HGAP = 10;
-  // Determine which columns / rows are actually populated so the grid
-  // collapses cleanly when only one side has entries.
+  // Determine which input columns / rows are actually populated so the
+  // input grid collapses cleanly. The alternative boxes (50% × W-2 and
+  // 25% W-2 + 2.5% UBIA) are always rendered side-by-side, so the area
+  // is always at least 2-cells wide regardless of how many inputs there
+  // are — otherwise the right alternative box would collide with the
+  // main diagram's level1 row.
   const wageCol1Active = wageCapInputs.some((f) => f.col === 1);
   const wageRow1Active = wageCapInputs.some((f) => f.row === 1);
-  const wageCols = wageCol1Active ? 2 : 1;
   const wageRows = wageRow1Active ? 2 : 1;
-  const wageGridWidth = wageCols * BW + (wageCols - 1) * WAGE_HGAP;
+  const ALTS_WIDTH = 2 * BW + WAGE_HGAP;
+  const inputGridWidth = (wageCol1Active ? 2 : 1) * BW + (wageCol1Active ? WAGE_HGAP : 0);
+  const wageGridWidth = showWageCap ? Math.max(ALTS_WIDTH, inputGridWidth) : 0;
 
   const maxFeederStack = Math.max(
     nonSstbFeeders.length,
