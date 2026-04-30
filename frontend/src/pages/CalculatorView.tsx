@@ -261,6 +261,15 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
   const reitPtpComponentValue = reitPtpComponent;
   const businessComponents = Math.max(0, qbidAmount - reitPtpComponentValue);
   const reductionFromCaps = Math.max(0, qbiComponentMax - businessComponents);
+  // Treat sub-dollar deltas as floating-point noise rather than a real cap.
+  const meaningfulReduction = reductionFromCaps >= 1;
+  // The wage cap is "actually contributing" when the reduction is larger
+  // than what SSTB phase-out alone could explain (max possible SSTB
+  // reduction is 20% × SSTB QBI, when applicable_rate hits 0). Below
+  // threshold this is always false, so the dashed cap edge stays hidden.
+  const sstbMaxPossibleReduction = 0.20 * Math.max(0, sstb);
+  const wageCapActuallyBinds =
+    showWageCap && wageCap < qbiComponentMax && reductionFromCaps > sstbMaxPossibleReduction + 1;
   // Don't mark anything as binding when both candidates are zero (stale state).
   const hasOutputs = qbidAmount > 0 || incomeLimit > 0;
   const qbiDeductionBinds = hasOutputs && qbidAmount <= incomeLimit;
@@ -366,7 +375,7 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
       x: 90 + SHIFT,
       y: level2Y,
       w: BW,
-      h: reductionFromCaps > 0 ? 68 : BH,
+      h: meaningfulReduction ? 68 : BH,
       label: '20% × Total QBI',
       value: qbiComponentMax,
       formLine: 'L5',
@@ -374,7 +383,7 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
       // When wage caps and/or SSTB phase-out actually trim the QBI side
       // before it merges into QBI deduction, show the post-cap value
       // here at the source rather than as a downstream "after caps" note.
-      subtitle: reductionFromCaps > 0 ? `→ ${formatCurrency(businessComponents)} after caps` : undefined,
+      subtitle: meaningfulReduction ? `→ ${formatCurrency(businessComponents)} after caps` : undefined,
     },
     { id: 'reit_ptp_comp', x: 330 + SHIFT, y: level2Y, w: BW, h: BH, label: '20% × REIT/PTP', value: reitPtpComponent, formLine: 'L9', kind: 'op' },
     { id: 'income_limit', x: 570 + SHIFT, y: level2Y, w: BW, h: BH, label: 'Income limit', value: incomeLimit, formLine: 'L14', kind: 'op', binds: incomeLimitBinds },
@@ -444,18 +453,17 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
   // actually binds above the threshold, but surfacing it always lets
   // users see how their W-2 / UBIA inputs relate to the deduction.
   if (showWageCap) {
-    const capActuallyFires = reductionFromCaps > 0;
     boxes.push({
       id: 'wage_cap',
       x: WAGE_CAP_X,
       y: level2Y,
       w: BW,
-      h: capActuallyFires ? 84 : 96,
+      h: wageCapActuallyBinds ? 84 : 96,
       label: 'Wage cap',
       value: wageCap,
       formLine: '(b)(2)(B)',
       kind: 'op',
-      subtitle: capActuallyFires
+      subtitle: wageCapActuallyBinds
         ? ['max(50% W-2,', '25% W-2 + 2.5% UBIA)']
         : ['max(50% W-2,', '25% W-2 + 2.5% UBIA)', '(not binding here)'],
     });
@@ -476,7 +484,7 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
     ...(showWageCap
       ? [
           ...wageCapInputs.map((f) => ({ from: `feeder_${f.name}`, to: 'wage_cap' })),
-          ...(reductionFromCaps > 0
+          ...(wageCapActuallyBinds
             ? [{ from: 'wage_cap', to: 'qbi_comp_max', op: 'caps' } as DiagramEdge]
             : []),
         ]
