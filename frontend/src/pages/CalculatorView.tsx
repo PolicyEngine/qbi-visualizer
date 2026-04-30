@@ -672,6 +672,10 @@ export default function CalculatorView() {
 
   const handleChange = useCallback((name: string, value: any) => {
     setInputs((prev) => ({ ...prev, [name]: value }));
+    // Stale-result protection: any input change blanks the displayed
+    // result until the user hits Calculate again.
+    setResult(null);
+    setError(null);
   }, []);
 
   const handleCalculate = async () => {
