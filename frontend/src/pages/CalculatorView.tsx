@@ -812,7 +812,7 @@ export default function CalculatorView() {
                 {/* Header row */}
                 <div className="grid grid-cols-[1fr_140px_72px] gap-1 px-3 py-1 border-t border-pe-gray-100 text-[10px] text-pe-text-tertiary uppercase tracking-wider">
                   <span>Source</span>
-                  <span className="text-right">Amount</span>
+                  <span>Amount</span>
                   <span className="text-center inline-flex items-center justify-center">
                     Qualified
                     <InfoTooltip definition={QUALIFIED_FLAG_DEFINITION} />
