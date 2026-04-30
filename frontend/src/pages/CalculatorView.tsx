@@ -452,11 +452,14 @@ function BoxLineDiagram({ outputs, inputs }: { outputs: Outputs; inputs: Record<
     ...nonSstbFeeders.map((f, i) => ({ from: `feeder_${f.name}`, to: 'non_sstb', op: i > 0 ? 'Σ' : undefined })),
     ...sstbFeeders.map((f) => ({ from: `feeder_${f.name}`, to: 'sstb' })),
     ...capGainFeeders.map((f, i) => ({ from: `feeder_${f.name}`, to: 'cap_gain', op: i > 0 ? 'Σ' : undefined })),
-    // Wage cap input feeders → Wage cap node, then dashed constraint to L10
+    // Wage cap input feeders → Wage cap node, then dashed constraint to
+    // the 20% × Total QBI box. The wage cap caps the QBI side (per
+    // §199A(b)(2)(B)); it never touches the REIT/PTP component, which
+    // is why pointing it at the L10 sum was misleading.
     ...(showWageCap
       ? [
           ...wageCapInputs.map((f) => ({ from: `feeder_${f.name}`, to: 'wage_cap' })),
-          { from: 'wage_cap', to: 'qbi_deduction', op: 'caps' } as DiagramEdge,
+          { from: 'wage_cap', to: 'qbi_comp_max', op: 'caps' } as DiagramEdge,
         ]
       : []),
     // Level 0 → first ops
