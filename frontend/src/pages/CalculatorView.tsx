@@ -229,6 +229,10 @@ interface DiagramEdge {
   // would push the line through unrelated boxes.
   exitSide?: BoxSide;
   enterSide?: BoxSide;
+  // Mark cross-zone "informational" edges (e.g. QBI source → TI) so
+  // they render with reduced opacity / dashed stroke and don't dominate
+  // the primary flow.
+  secondary?: boolean;
 }
 
 function BoxLineDiagram({
@@ -317,15 +321,7 @@ function BoxLineDiagram({
   const nonSstbFeeders = feedersFor('non_sstb');
   const sstbFeeders = feedersFor('sstb');
   const capGainFeeders = feedersFor('cap_gain');
-  // QBI source income (SE / partnership / farm / rental / SSTB) is also
-  // included in TI. Render duplicate "ghost" feeder boxes above TI so the
-  // dual-purpose flow is visible without drawing arrows that span the
-  // entire diagram. Different name prefix keeps the feeder_<id> unique.
-  const tiQbiGhosts: Feeder[] = [...nonSstbFeeders, ...sstbFeeders].map((f) => ({
-    ...f,
-    name: `ti_ghost_${f.name}`,
-  }));
-  const tiFeeders = [...feedersFor('ti'), ...tiQbiGhosts];
+  const tiFeeders = feedersFor('ti');
 
   // Wage / UBIA cap area (§199A(b)(2)(B)). Each input has a FIXED grid
   // position (col 0 = wages, col 1 = property; row 0 = total, row 1 =
@@ -402,14 +398,25 @@ function BoxLineDiagram({
   const inputGridWidth = (wageCol1Active ? 2 : 1) * BW + (wageCol1Active ? WAGE_HGAP : 0);
   const wageGridWidth = showWageCap ? Math.max(ALTS_WIDTH, inputGridWidth) : 0;
 
-  const maxFeederStack = Math.max(
-    nonSstbFeeders.length,
-    sstbFeeders.length,
+  // Two stacked feeder zones: multi-target inputs (QBI source income
+  // that flows into both its QBI bucket AND Taxable income) sit on a
+  // top row by themselves; single-target feeders (wage cap inputs,
+  // capital gain components, plain TI inputs) bottom-align against
+  // level0Y in the row below.
+  const multiTargetStack = Math.max(nonSstbFeeders.length, sstbFeeders.length);
+  const singleTargetStack = Math.max(
     capGainFeeders.length,
     tiFeeders.length,
     wageRows,
   );
-  const feederAreaH = maxFeederStack > 0 ? maxFeederStack * (FEEDER_BH + FEEDER_GAP) + 24 : 0;
+  const ROW_H = FEEDER_BH + FEEDER_GAP;
+  const ZONE_PAD = 16;
+  const multiTargetZoneH = multiTargetStack > 0 ? multiTargetStack * ROW_H + ZONE_PAD : 0;
+  const singleTargetTopY = 10 + multiTargetZoneH;
+  const feederAreaH =
+    multiTargetStack + singleTargetStack > 0
+      ? multiTargetZoneH + singleTargetStack * ROW_H + 24
+      : 0;
 
   // Three vertical zones, left to right:
   //   1. Income-limit zone — TI / cap gain → ti_less_cg → income limit.
@@ -524,14 +531,23 @@ function BoxLineDiagram({
 
   // Add feeder boxes (non-zero raw inputs) above their target QBI bucket.
   // Bottom-align: single feeders sit just above the target rather than
-  // floating at the top of the feeder area.
-  const addFeederColumn = (feeders: Feeder[], targetX: number) => {
-    const offset = maxFeederStack - feeders.length; // empty rows above
+  // floating at the top of the feeder area. Multi-target feeders (a
+  // single QBI source income that feeds both its QBI bucket AND TI)
+  // are top-aligned so they sit visibly above single-target feeders —
+  // this signals their broader role in the computation.
+  const addFeederColumn = (feeders: Feeder[], targetX: number, opts: { multiTarget?: boolean } = {}) => {
+    // Multi-target feeders top-align at y=10 in the upper zone.
+    // Single-target feeders bottom-align against level0Y in the lower
+    // zone (so a single feeder sits just above its target rather than
+    // floating high in the column).
+    const baseY = opts.multiTarget ? 10 : singleTargetTopY;
+    const stackHeight = opts.multiTarget ? multiTargetStack : singleTargetStack;
+    const offset = opts.multiTarget ? 0 : stackHeight - feeders.length;
     feeders.forEach((f, i) => {
       boxes.push({
         id: `feeder_${f.name}`,
         x: targetX,
-        y: 10 + (offset + i) * (FEEDER_BH + FEEDER_GAP),
+        y: baseY + (offset + i) * ROW_H,
         w: BW,
         h: FEEDER_BH,
         label: f.label,
@@ -543,18 +559,21 @@ function BoxLineDiagram({
   };
   addFeederColumn(capGainFeeders, INCOME_X);
   addFeederColumn(tiFeeders, INCOME_X + BW + WAGE_HGAP);
-  addFeederColumn(nonSstbFeeders, 10 + SHIFT);
-  addFeederColumn(sstbFeeders, 170 + SHIFT);
+  addFeederColumn(nonSstbFeeders, 10 + SHIFT, { multiTarget: true });
+  addFeederColumn(sstbFeeders, 170 + SHIFT, { multiTarget: true });
   // Wage cap inputs sit in fixed grid positions: col 0 = wages, col 1
   // = property; row 0 = total, row 1 = SSTB allocable. Each input
   // always lands in its own slot regardless of which others are entered.
   if (showWageCap) {
-    const offsetRows = maxFeederStack - wageRows;
+    // Wage cap feeders are single-target (only feed the wage / UBIA cap
+    // chain), so they bottom-align in the lower zone alongside the other
+    // single-target feeders.
+    const offsetRows = singleTargetStack - wageRows;
     wageCapInputs.forEach((f) => {
       boxes.push({
         id: `feeder_${f.name}`,
         x: WAGE_X + f.col * (BW + WAGE_HGAP),
-        y: 10 + (offsetRows + f.row) * (FEEDER_BH + FEEDER_GAP),
+        y: singleTargetTopY + (offsetRows + f.row) * ROW_H,
         w: BW,
         h: FEEDER_BH,
         label: f.label,
@@ -617,26 +636,24 @@ function BoxLineDiagram({
       x: WAGE_X,
       y: level1Y,
       w: BW,
-      h: 64,
+      h: BH,
       label: 'Wage-only',
       value: wageOnly,
       formLine: 'L13',
       kind: 'op',
       binds: wageOnlyWins && wageCap > 0,
-      subtitle: ['50% × W-2'],
     });
     boxes.push({
       id: 'wage_alt_25_ubia',
       x: WAGE_X + BW + WAGE_HGAP,
       y: level1Y,
       w: BW,
-      h: 64,
+      h: BH,
       label: 'Wage + capital',
       value: wageUbia,
       formLine: 'L16',
       kind: 'op',
       binds: !wageOnlyWins && wageCap > 0,
-      subtitle: ['25% × W-2 + 2.5% × UBIA'],
     });
 
     // Status lines longer than ~22 chars overflow at fontSize 9, so split
@@ -679,18 +696,17 @@ function BoxLineDiagram({
     if (inPhaseIn && reductionRate !== undefined) {
       const excess = Math.max(0, qbiComponentMax - wageCap);
       const excessY = level2Y + wageCapH + 24;
-      const phaseY = excessY + 64 + 24;
+      const phaseY = excessY + BH + 24;
       boxes.push({
         id: 'phase_in_excess',
         x: WAGE_CAP_X,
         y: excessY,
         w: BW,
-        h: 64,
+        h: BH,
         label: 'Excess',
         value: excess,
         formLine: 'L21',
         kind: 'op',
-        subtitle: ['L5 − wage cap'],
       });
       boxes.push({
         id: 'phase_in_rate',
@@ -738,16 +754,39 @@ function BoxLineDiagram({
     ...sstbFeeders.map((f) => ({ from: `feeder_${f.name}`, to: 'sstb' })),
     ...capGainFeeders.map((f, i) => ({ from: `feeder_${f.name}`, to: 'cap_gain', op: i > 0 ? 'Σ' : undefined })),
     ...tiFeeders.map((f, i) => ({ from: `feeder_${f.name}`, to: 'ti', op: i > 0 ? 'Σ' : undefined })),
+    // Each QBI source income also flows into Taxable income. Single
+    // feeder box, two outgoing arrows (one to its QBI bucket, one to
+    // TI). The TI-bound arrow is rendered as a "secondary" edge —
+    // dashed and faded — so the long cross-diagram run reads as an
+    // informational dependency rather than a primary flow.
+    ...nonSstbFeeders.map(
+      (f): DiagramEdge => ({
+        from: `feeder_${f.name}`,
+        to: 'ti',
+        exitSide: 'left',
+        enterSide: 'top',
+        secondary: true,
+      }),
+    ),
+    ...sstbFeeders.map(
+      (f): DiagramEdge => ({
+        from: `feeder_${f.name}`,
+        to: 'ti',
+        exitSide: 'left',
+        enterSide: 'top',
+        secondary: true,
+      }),
+    ),
     // Wage cap routing — feeders go through the 50% W-2 and
     // 25% W-2 + 2.5% UBIA alternative boxes (Form 8995-A L13 / L16)
     // before merging at Wage cap (max). SSTB-allocable feeders bypass
     // the alternatives since they only matter for per-bucket caps.
     ...(showWageCap
       ? [
-          { from: 'feeder_w2_wages_from_qualified_business', to: 'wage_alt_50' } as DiagramEdge,
-          { from: 'feeder_w2_wages_from_qualified_business', to: 'wage_alt_25_ubia' } as DiagramEdge,
+          { from: 'feeder_w2_wages_from_qualified_business', to: 'wage_alt_50', op: '× 50%' } as DiagramEdge,
+          { from: 'feeder_w2_wages_from_qualified_business', to: 'wage_alt_25_ubia', op: '× 25%' } as DiagramEdge,
           ...(inputVal('unadjusted_basis_qualified_property') > 0
-            ? [{ from: 'feeder_unadjusted_basis_qualified_property', to: 'wage_alt_25_ubia' } as DiagramEdge]
+            ? [{ from: 'feeder_unadjusted_basis_qualified_property', to: 'wage_alt_25_ubia', op: '+ × 2.5%' } as DiagramEdge]
             : []),
           { from: 'wage_alt_50', to: 'wage_cap' } as DiagramEdge,
           { from: 'wage_alt_25_ubia', to: 'wage_cap', op: 'max' } as DiagramEdge,
@@ -814,7 +853,11 @@ function BoxLineDiagram({
     { from: 'non_sstb', to: 'total_qbi' },
     { from: 'sstb', to: 'total_qbi', op: 'Σ' },
     { from: 'ti', to: 'ti_less_cg' },
-    { from: 'cap_gain', to: 'ti_less_cg', op: '−' },
+    {
+      from: 'cap_gain',
+      to: 'ti_less_cg',
+      op: netCapGain > 0 ? `−${formatCurrency(netCapGain)}` : '−',
+    },
     // First ops & REIT/PTP → ×20%
     { from: 'total_qbi', to: 'qbi_comp_max', op: '×0.20' },
     { from: 'reit_ptp', to: 'reit_ptp_comp', op: '×0.20' },
@@ -904,6 +947,7 @@ function BoxLineDiagram({
           const lineEnd = { x: b.x + pullBack.x, y: b.y + pullBack.y };
           const isFinalEdge = e.to === 'final_qbid';
           const isConstraint = e.from === 'wage_cap' || e.from === 'phase_in_rate';
+          const isSecondary = e.secondary === true;
           const stroke = isFinalEdge ? '#319795' : isConstraint ? '#D97706' : '#9CA3AF';
           const marker = isFinalEdge ? 'url(#arrow-teal)' : isConstraint ? 'url(#arrow-amber)' : 'url(#arrow)';
           const opLabelW = e.op && e.op.length > 4 ? Math.max(36, e.op.length * 7) : 36;
@@ -916,7 +960,7 @@ function BoxLineDiagram({
                 strokeDasharray={isConstraint ? '5 4' : undefined}
                 fill="none"
                 markerEnd={marker}
-                opacity={isFinalEdge ? 1 : 0.85}
+                opacity={isFinalEdge ? 1 : isSecondary ? 0.6 : 0.85}
               />
               {e.op && (
                 <g transform={`translate(${(a.x + b.x) / 2}, ${(a.y + b.y) / 2})`}>
