@@ -233,6 +233,11 @@ interface DiagramEdge {
   // they render with reduced opacity / dashed stroke and don't dominate
   // the primary flow.
   secondary?: boolean;
+  // Scale the bezier control-point magnitude. <1 makes the curve more
+  // linear (less swing); >1 makes it bow further from the straight
+  // line. Use to tune cross-zone edges that visually clip neighboring
+  // boxes even when they don't mathematically intersect them.
+  magScale?: number;
 }
 
 function BoxLineDiagram({
@@ -719,9 +724,12 @@ function BoxLineDiagram({
         valueFormat: 'percent',
         formLine: 'L23',
         kind: 'op',
+        // Show the full §199A(b)(3)(B) ratio inline so users can verify
+        // the rate without a tooltip:
+        //   (TI − threshold) ÷ phase-in length
         subtitle: [
-          `TI ${formatCurrency(tiBefore)}`,
-          `into ${formatCurrency(threshold!)}–${formatCurrency(threshold! + phaseInLength!)}`,
+          `(${formatCurrency(tiBefore)} − ${formatCurrency(threshold!)})`,
+          `÷ ${formatCurrency(phaseInLength!)}`,
         ],
       });
     }
@@ -806,7 +814,11 @@ function BoxLineDiagram({
                 {
                   from: 'ti',
                   to: 'phase_in_rate',
-                  exitSide: 'right',
+                  // Drop straight down from TI's bottom and only sweep
+                  // right at the very end into Phase-in rate's left side.
+                  // A right→left routing instead skews the curve through
+                  // the Wage-only (L13) box that sits between them.
+                  exitSide: 'bottom',
                   enterSide: 'left',
                 } as DiagramEdge,
                 // Both operands of the L5 − wage_cap subtraction feed
@@ -877,7 +889,7 @@ function BoxLineDiagram({
     // bezier doesn't overshoot — without side anchors, income_limit's
     // top-down curve dips into the Phase-in rate box.
     { from: 'qbi_deduction', to: 'final_qbid', exitSide: 'left', enterSide: 'right' },
-    { from: 'income_limit', to: 'final_qbid', op: 'MIN', exitSide: 'right', enterSide: 'left' },
+    { from: 'income_limit', to: 'final_qbid', op: 'MIN', exitSide: 'bottom', enterSide: 'left' },
   ];
 
   const boxById = (id: string) => boxes.find((b) => b.id === id)!;
@@ -936,7 +948,8 @@ function BoxLineDiagram({
           // gentle curves and long ones get pronounced ones. Floor at 40
           // so even tiny edges have a visible bend off the box face.
           const dist = Math.hypot(b.x - a.x, b.y - a.y);
-          const mag = Math.max(40, dist * 0.4);
+          const magScale = e.magScale ?? 1.0;
+          const mag = Math.max(40, dist * 0.4 * magScale);
           const o1 = outward(exitSide, mag);
           const o2 = outward(enterSide, mag);
           const cp1 = { x: a.x + o1.x, y: a.y + o1.y };
@@ -962,14 +975,32 @@ function BoxLineDiagram({
                 markerEnd={marker}
                 opacity={isFinalEdge ? 1 : isSecondary ? 0.6 : 0.85}
               />
-              {e.op && (
-                <g transform={`translate(${(a.x + b.x) / 2}, ${(a.y + b.y) / 2})`}>
-                  <rect x={-opLabelW / 2} y={-9} width={opLabelW} height={18} rx={9} fill="white" stroke="#E2E8F0" strokeWidth={1} />
-                  <text x={0} y={4} textAnchor="middle" fontSize="10" fontFamily="ui-monospace, monospace" fill={isConstraint ? '#D97706' : '#4B5563'}>
-                    {e.op}
-                  </text>
-                </g>
-              )}
+              {e.op && (() => {
+                // Place the op label at the actual bezier midpoint (t=0.5)
+                // rather than the straight-line midpoint between anchors —
+                // when exit/enter sides differ, the curve can sit far from
+                // the anchor midpoint and the label visually drifts off.
+                const t = 0.5;
+                const u = 1 - t;
+                const labelX =
+                  u * u * u * a.x +
+                  3 * u * u * t * cp1.x +
+                  3 * u * t * t * cp2.x +
+                  t * t * t * b.x;
+                const labelY =
+                  u * u * u * a.y +
+                  3 * u * u * t * cp1.y +
+                  3 * u * t * t * cp2.y +
+                  t * t * t * b.y;
+                return (
+                  <g transform={`translate(${labelX}, ${labelY})`}>
+                    <rect x={-opLabelW / 2} y={-9} width={opLabelW} height={18} rx={9} fill="white" stroke="#E2E8F0" strokeWidth={1} />
+                    <text x={0} y={4} textAnchor="middle" fontSize="10" fontFamily="ui-monospace, monospace" fill={isConstraint ? '#D97706' : '#4B5563'}>
+                      {e.op}
+                    </text>
+                  </g>
+                );
+              })()}
             </g>
           );
         })}
