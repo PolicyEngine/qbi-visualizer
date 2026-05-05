@@ -1699,7 +1699,7 @@ export default function CalculatorView() {
             >
               GitHub
             </a>
-            . This is an informational tool, not tax advice.
+            .
           </p>
         </footer>
       </section>
