@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { InfoTooltip } from '../components/InfoTooltip';
 import { INPUT_DEFINITIONS, QUALIFIED_FLAG_DEFINITION } from '../data/inputDefinitions';
 
@@ -229,6 +230,19 @@ interface DiagramEdge {
   // would push the line through unrelated boxes.
   exitSide?: BoxSide;
   enterSide?: BoxSide;
+  // Mark cross-zone "informational" edges (e.g. QBI source → TI) so
+  // they render with reduced opacity / dashed stroke and don't dominate
+  // the primary flow.
+  secondary?: boolean;
+  // Scale the bezier control-point magnitude. <1 makes the curve more
+  // linear (less swing); >1 makes it bow further from the straight
+  // line. Use to tune cross-zone edges that visually clip neighboring
+  // boxes even when they don't mathematically intersect them.
+  magScale?: number;
+  // Where along the curve to place the op label, in [0, 1]. Defaults
+  // to 0.5 (midpoint). Use to nudge labels apart when two edges share
+  // a near-identical midpoint and their labels would otherwise overlap.
+  labelT?: number;
 }
 
 function BoxLineDiagram({
@@ -317,15 +331,7 @@ function BoxLineDiagram({
   const nonSstbFeeders = feedersFor('non_sstb');
   const sstbFeeders = feedersFor('sstb');
   const capGainFeeders = feedersFor('cap_gain');
-  // QBI source income (SE / partnership / farm / rental / SSTB) is also
-  // included in TI. Render duplicate "ghost" feeder boxes above TI so the
-  // dual-purpose flow is visible without drawing arrows that span the
-  // entire diagram. Different name prefix keeps the feeder_<id> unique.
-  const tiQbiGhosts: Feeder[] = [...nonSstbFeeders, ...sstbFeeders].map((f) => ({
-    ...f,
-    name: `ti_ghost_${f.name}`,
-  }));
-  const tiFeeders = [...feedersFor('ti'), ...tiQbiGhosts];
+  const tiFeeders = feedersFor('ti');
 
   // Wage / UBIA cap area (§199A(b)(2)(B)). Each input has a FIXED grid
   // position (col 0 = wages, col 1 = property; row 0 = total, row 1 =
@@ -402,14 +408,25 @@ function BoxLineDiagram({
   const inputGridWidth = (wageCol1Active ? 2 : 1) * BW + (wageCol1Active ? WAGE_HGAP : 0);
   const wageGridWidth = showWageCap ? Math.max(ALTS_WIDTH, inputGridWidth) : 0;
 
-  const maxFeederStack = Math.max(
-    nonSstbFeeders.length,
-    sstbFeeders.length,
+  // Two stacked feeder zones: multi-target inputs (QBI source income
+  // that flows into both its QBI bucket AND Taxable income) sit on a
+  // top row by themselves; single-target feeders (wage cap inputs,
+  // capital gain components, plain TI inputs) bottom-align against
+  // level0Y in the row below.
+  const multiTargetStack = Math.max(nonSstbFeeders.length, sstbFeeders.length);
+  const singleTargetStack = Math.max(
     capGainFeeders.length,
     tiFeeders.length,
     wageRows,
   );
-  const feederAreaH = maxFeederStack > 0 ? maxFeederStack * (FEEDER_BH + FEEDER_GAP) + 24 : 0;
+  const ROW_H = FEEDER_BH + FEEDER_GAP;
+  const ZONE_PAD = 16;
+  const multiTargetZoneH = multiTargetStack > 0 ? multiTargetStack * ROW_H + ZONE_PAD : 0;
+  const singleTargetTopY = 10 + multiTargetZoneH;
+  const feederAreaH =
+    multiTargetStack + singleTargetStack > 0
+      ? multiTargetZoneH + singleTargetStack * ROW_H + 24
+      : 0;
 
   // Three vertical zones, left to right:
   //   1. Income-limit zone — TI / cap gain → ti_less_cg → income limit.
@@ -462,7 +479,7 @@ function BoxLineDiagram({
     // the INNER edge so TI is closest to the wage / phase-in zone — the
     // TI → Phase-in rate edge can hop directly across the zone gap.
     { id: 'cap_gain', x: INCOME_X, y: level0Y, w: BW, h: BH, label: 'Net capital gain', value: netCapGain, formLine: 'L12', kind: 'input' },
-    { id: 'ti', x: INCOME_X + BW + WAGE_HGAP, y: level0Y, w: BW, h: BH, label: 'Taxable income', value: tiBefore, formLine: 'L11', kind: 'input' },
+    { id: 'ti', x: INCOME_X + BW + WAGE_HGAP, y: level0Y, w: BW, h: BH, label: 'Taxable Income (TI)', value: tiBefore, formLine: 'L11', kind: 'input' },
     // QBI zone (right)
     { id: 'non_sstb', x: 10 + SHIFT, y: level0Y, w: BW, h: BH, label: 'Non-SSTB QBI', value: nonSstb, formLine: 'L2', kind: 'input' },
     { id: 'sstb', x: 170 + SHIFT, y: level0Y, w: BW, h: BH, label: 'SSTB QBI', value: sstb, formLine: 'L2 (SSTB)', kind: 'input' },
@@ -524,14 +541,23 @@ function BoxLineDiagram({
 
   // Add feeder boxes (non-zero raw inputs) above their target QBI bucket.
   // Bottom-align: single feeders sit just above the target rather than
-  // floating at the top of the feeder area.
-  const addFeederColumn = (feeders: Feeder[], targetX: number) => {
-    const offset = maxFeederStack - feeders.length; // empty rows above
+  // floating at the top of the feeder area. Multi-target feeders (a
+  // single QBI source income that feeds both its QBI bucket AND TI)
+  // are top-aligned so they sit visibly above single-target feeders —
+  // this signals their broader role in the computation.
+  const addFeederColumn = (feeders: Feeder[], targetX: number, opts: { multiTarget?: boolean } = {}) => {
+    // Multi-target feeders top-align at y=10 in the upper zone.
+    // Single-target feeders bottom-align against level0Y in the lower
+    // zone (so a single feeder sits just above its target rather than
+    // floating high in the column).
+    const baseY = opts.multiTarget ? 10 : singleTargetTopY;
+    const stackHeight = opts.multiTarget ? multiTargetStack : singleTargetStack;
+    const offset = opts.multiTarget ? 0 : stackHeight - feeders.length;
     feeders.forEach((f, i) => {
       boxes.push({
         id: `feeder_${f.name}`,
         x: targetX,
-        y: 10 + (offset + i) * (FEEDER_BH + FEEDER_GAP),
+        y: baseY + (offset + i) * ROW_H,
         w: BW,
         h: FEEDER_BH,
         label: f.label,
@@ -543,18 +569,21 @@ function BoxLineDiagram({
   };
   addFeederColumn(capGainFeeders, INCOME_X);
   addFeederColumn(tiFeeders, INCOME_X + BW + WAGE_HGAP);
-  addFeederColumn(nonSstbFeeders, 10 + SHIFT);
-  addFeederColumn(sstbFeeders, 170 + SHIFT);
+  addFeederColumn(nonSstbFeeders, 10 + SHIFT, { multiTarget: true });
+  addFeederColumn(sstbFeeders, 170 + SHIFT, { multiTarget: true });
   // Wage cap inputs sit in fixed grid positions: col 0 = wages, col 1
   // = property; row 0 = total, row 1 = SSTB allocable. Each input
   // always lands in its own slot regardless of which others are entered.
   if (showWageCap) {
-    const offsetRows = maxFeederStack - wageRows;
+    // Wage cap feeders are single-target (only feed the wage / UBIA cap
+    // chain), so they bottom-align in the lower zone alongside the other
+    // single-target feeders.
+    const offsetRows = singleTargetStack - wageRows;
     wageCapInputs.forEach((f) => {
       boxes.push({
         id: `feeder_${f.name}`,
         x: WAGE_X + f.col * (BW + WAGE_HGAP),
-        y: 10 + (offsetRows + f.row) * (FEEDER_BH + FEEDER_GAP),
+        y: singleTargetTopY + (offsetRows + f.row) * ROW_H,
         w: BW,
         h: FEEDER_BH,
         label: f.label,
@@ -603,7 +632,7 @@ function BoxLineDiagram({
       if (reductionRate === undefined) {
         return wageCapActuallyBinds ? undefined : '(not binding here)';
       }
-      if (reductionRate === 0) return '(below threshold — cap not applied)';
+      if (reductionRate === 0) return '(TI below threshold)';
       if (inPhaseIn) return undefined; // shown in dedicated phase-in box
       if (aboveRange && wageCap < qbiComponentMax) return '(above range — full cap)';
       if (wageCap >= qbiComponentMax) return '(not binding here)';
@@ -617,26 +646,24 @@ function BoxLineDiagram({
       x: WAGE_X,
       y: level1Y,
       w: BW,
-      h: 64,
+      h: BH,
       label: 'Wage-only',
       value: wageOnly,
       formLine: 'L13',
       kind: 'op',
       binds: wageOnlyWins && wageCap > 0,
-      subtitle: ['50% × W-2'],
     });
     boxes.push({
       id: 'wage_alt_25_ubia',
       x: WAGE_X + BW + WAGE_HGAP,
       y: level1Y,
       w: BW,
-      h: 64,
+      h: BH,
       label: 'Wage + capital',
       value: wageUbia,
       formLine: 'L16',
       kind: 'op',
       binds: !wageOnlyWins && wageCap > 0,
-      subtitle: ['25% × W-2 + 2.5% × UBIA'],
     });
 
     // Status lines longer than ~22 chars overflow at fontSize 9, so split
@@ -679,18 +706,17 @@ function BoxLineDiagram({
     if (inPhaseIn && reductionRate !== undefined) {
       const excess = Math.max(0, qbiComponentMax - wageCap);
       const excessY = level2Y + wageCapH + 24;
-      const phaseY = excessY + 64 + 24;
+      const phaseY = excessY + BH + 24;
       boxes.push({
         id: 'phase_in_excess',
         x: WAGE_CAP_X,
         y: excessY,
         w: BW,
-        h: 64,
+        h: BH,
         label: 'Excess',
         value: excess,
         formLine: 'L21',
         kind: 'op',
-        subtitle: ['L5 − wage cap'],
       });
       boxes.push({
         id: 'phase_in_rate',
@@ -703,9 +729,12 @@ function BoxLineDiagram({
         valueFormat: 'percent',
         formLine: 'L23',
         kind: 'op',
+        // Show the full §199A(b)(3)(B) ratio inline so users can verify
+        // the rate without a tooltip:
+        //   (TI − threshold) ÷ phase-in length
         subtitle: [
-          `TI ${formatCurrency(tiBefore)}`,
-          `into ${formatCurrency(threshold!)}–${formatCurrency(threshold! + phaseInLength!)}`,
+          `(${formatCurrency(tiBefore)} − ${formatCurrency(threshold!)})`,
+          `÷ ${formatCurrency(phaseInLength!)}`,
         ],
       });
     }
@@ -734,20 +763,50 @@ function BoxLineDiagram({
     // Feeders → QBI buckets. Multi-feeder columns get a Σ on the second-
     // and-later edges to mark the merge; the SE-tax allocation reduction
     // shows up as a subtitle on the destination box, not on an edge.
-    ...nonSstbFeeders.map((f, i) => ({ from: `feeder_${f.name}`, to: 'non_sstb', op: i > 0 ? 'Σ' : undefined })),
+    // Multiple feeders into a single bucket already reads as a sum
+    // visually (N arrows → 1 box). Per-edge Σ labels stacked on top of
+    // each other at the merge point when several feeders were entered;
+    // dropping them keeps the merge clean.
+    ...nonSstbFeeders.map((f) => ({ from: `feeder_${f.name}`, to: 'non_sstb' })),
     ...sstbFeeders.map((f) => ({ from: `feeder_${f.name}`, to: 'sstb' })),
-    ...capGainFeeders.map((f, i) => ({ from: `feeder_${f.name}`, to: 'cap_gain', op: i > 0 ? 'Σ' : undefined })),
-    ...tiFeeders.map((f, i) => ({ from: `feeder_${f.name}`, to: 'ti', op: i > 0 ? 'Σ' : undefined })),
+    ...capGainFeeders.map((f) => ({ from: `feeder_${f.name}`, to: 'cap_gain' })),
+    ...tiFeeders.map((f) => ({ from: `feeder_${f.name}`, to: 'ti' })),
+    // Each QBI source income also flows into Taxable income. Single
+    // feeder box, two outgoing arrows (one to its QBI bucket, one to
+    // TI). The TI-bound arrow is rendered as a "secondary" edge —
+    // dashed and faded — so the long cross-diagram run reads as an
+    // informational dependency rather than a primary flow.
+    ...nonSstbFeeders.map(
+      (f): DiagramEdge => ({
+        from: `feeder_${f.name}`,
+        to: 'ti',
+        exitSide: 'left',
+        enterSide: 'top',
+        secondary: true,
+      }),
+    ),
+    ...sstbFeeders.map(
+      (f): DiagramEdge => ({
+        from: `feeder_${f.name}`,
+        to: 'ti',
+        exitSide: 'left',
+        enterSide: 'top',
+        secondary: true,
+      }),
+    ),
     // Wage cap routing — feeders go through the 50% W-2 and
     // 25% W-2 + 2.5% UBIA alternative boxes (Form 8995-A L13 / L16)
     // before merging at Wage cap (max). SSTB-allocable feeders bypass
     // the alternatives since they only matter for per-bucket caps.
     ...(showWageCap
       ? [
-          { from: 'feeder_w2_wages_from_qualified_business', to: 'wage_alt_50' } as DiagramEdge,
-          { from: 'feeder_w2_wages_from_qualified_business', to: 'wage_alt_25_ubia' } as DiagramEdge,
+          // Push 50% down and 25% up so the two labels don't stack on
+          // top of each other where the curves emanate from the same
+          // W-2 feeder.
+          { from: 'feeder_w2_wages_from_qualified_business', to: 'wage_alt_50', op: '× 50%', labelT: 0.7 } as DiagramEdge,
+          { from: 'feeder_w2_wages_from_qualified_business', to: 'wage_alt_25_ubia', op: '× 25%', labelT: 0.3 } as DiagramEdge,
           ...(inputVal('unadjusted_basis_qualified_property') > 0
-            ? [{ from: 'feeder_unadjusted_basis_qualified_property', to: 'wage_alt_25_ubia' } as DiagramEdge]
+            ? [{ from: 'feeder_unadjusted_basis_qualified_property', to: 'wage_alt_25_ubia', op: '+ × 2.5%' } as DiagramEdge]
             : []),
           { from: 'wage_alt_50', to: 'wage_cap' } as DiagramEdge,
           { from: 'wage_alt_25_ubia', to: 'wage_cap', op: 'max' } as DiagramEdge,
@@ -767,7 +826,11 @@ function BoxLineDiagram({
                 {
                   from: 'ti',
                   to: 'phase_in_rate',
-                  exitSide: 'right',
+                  // Drop straight down from TI's bottom and only sweep
+                  // right at the very end into Phase-in rate's left side.
+                  // A right→left routing instead skews the curve through
+                  // the Wage-only (L13) box that sits between them.
+                  exitSide: 'bottom',
                   enterSide: 'left',
                 } as DiagramEdge,
                 // Both operands of the L5 − wage_cap subtraction feed
@@ -791,7 +854,7 @@ function BoxLineDiagram({
                   to: 'qbi_comp_after',
                   op: `−${formatCurrency(Math.max(0, qbiComponentMax - businessComponents))}`,
                   exitSide: 'right',
-                  enterSide: 'left',
+                  enterSide: 'top',
                 } as DiagramEdge,
               ]
             : showAfterCapBox
@@ -814,7 +877,11 @@ function BoxLineDiagram({
     { from: 'non_sstb', to: 'total_qbi' },
     { from: 'sstb', to: 'total_qbi', op: 'Σ' },
     { from: 'ti', to: 'ti_less_cg' },
-    { from: 'cap_gain', to: 'ti_less_cg', op: '−' },
+    {
+      from: 'cap_gain',
+      to: 'ti_less_cg',
+      op: netCapGain > 0 ? `−${formatCurrency(netCapGain)}` : '−',
+    },
     // First ops & REIT/PTP → ×20%
     { from: 'total_qbi', to: 'qbi_comp_max', op: '×0.20' },
     { from: 'reit_ptp', to: 'reit_ptp_comp', op: '×0.20' },
@@ -834,7 +901,7 @@ function BoxLineDiagram({
     // bezier doesn't overshoot — without side anchors, income_limit's
     // top-down curve dips into the Phase-in rate box.
     { from: 'qbi_deduction', to: 'final_qbid', exitSide: 'left', enterSide: 'right' },
-    { from: 'income_limit', to: 'final_qbid', op: 'MIN', exitSide: 'right', enterSide: 'left' },
+    { from: 'income_limit', to: 'final_qbid', op: 'MIN', exitSide: 'bottom', enterSide: 'left' },
   ];
 
   const boxById = (id: string) => boxes.find((b) => b.id === id)!;
@@ -865,6 +932,22 @@ function BoxLineDiagram({
   const contentRight = Math.max(...boxes.map((b) => b.x + b.w));
   const tightW = contentRight + 10;
 
+  // Click-anywhere-else dismissable popover for subtitle tooltips. SVG
+  // <title> tags don't render reliably across browsers, so we manage
+  // the popover ourselves and render it through a portal so it escapes
+  // the SVG / overflow boundaries.
+  const [tooltip, setTooltip] = useState<{ text: string; x: number; y: number } | null>(null);
+  useEffect(() => {
+    if (!tooltip) return;
+    const dismiss = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('[data-subtitle-popover]')) return;
+      setTooltip(null);
+    };
+    document.addEventListener('mousedown', dismiss);
+    return () => document.removeEventListener('mousedown', dismiss);
+  }, [tooltip]);
+
   return (
     <div className="mb-6 bg-white rounded-pe-lg border border-pe-gray-200 p-4">
       <h2 className="text-sm font-semibold text-pe-text-primary mb-3">Computation graph</h2>
@@ -893,7 +976,8 @@ function BoxLineDiagram({
           // gentle curves and long ones get pronounced ones. Floor at 40
           // so even tiny edges have a visible bend off the box face.
           const dist = Math.hypot(b.x - a.x, b.y - a.y);
-          const mag = Math.max(40, dist * 0.4);
+          const magScale = e.magScale ?? 1.0;
+          const mag = Math.max(40, dist * 0.4 * magScale);
           const o1 = outward(exitSide, mag);
           const o2 = outward(enterSide, mag);
           const cp1 = { x: a.x + o1.x, y: a.y + o1.y };
@@ -904,6 +988,7 @@ function BoxLineDiagram({
           const lineEnd = { x: b.x + pullBack.x, y: b.y + pullBack.y };
           const isFinalEdge = e.to === 'final_qbid';
           const isConstraint = e.from === 'wage_cap' || e.from === 'phase_in_rate';
+          const isSecondary = e.secondary === true;
           const stroke = isFinalEdge ? '#319795' : isConstraint ? '#D97706' : '#9CA3AF';
           const marker = isFinalEdge ? 'url(#arrow-teal)' : isConstraint ? 'url(#arrow-amber)' : 'url(#arrow)';
           const opLabelW = e.op && e.op.length > 4 ? Math.max(36, e.op.length * 7) : 36;
@@ -916,16 +1001,34 @@ function BoxLineDiagram({
                 strokeDasharray={isConstraint ? '5 4' : undefined}
                 fill="none"
                 markerEnd={marker}
-                opacity={isFinalEdge ? 1 : 0.85}
+                opacity={isFinalEdge ? 1 : isSecondary ? 0.6 : 0.85}
               />
-              {e.op && (
-                <g transform={`translate(${(a.x + b.x) / 2}, ${(a.y + b.y) / 2})`}>
-                  <rect x={-opLabelW / 2} y={-9} width={opLabelW} height={18} rx={9} fill="white" stroke="#E2E8F0" strokeWidth={1} />
-                  <text x={0} y={4} textAnchor="middle" fontSize="10" fontFamily="ui-monospace, monospace" fill={isConstraint ? '#D97706' : '#4B5563'}>
-                    {e.op}
-                  </text>
-                </g>
-              )}
+              {e.op && (() => {
+                // Place the op label at the actual bezier midpoint (t=0.5)
+                // rather than the straight-line midpoint between anchors —
+                // when exit/enter sides differ, the curve can sit far from
+                // the anchor midpoint and the label visually drifts off.
+                const t = e.labelT ?? 0.5;
+                const u = 1 - t;
+                const labelX =
+                  u * u * u * a.x +
+                  3 * u * u * t * cp1.x +
+                  3 * u * t * t * cp2.x +
+                  t * t * t * b.x;
+                const labelY =
+                  u * u * u * a.y +
+                  3 * u * u * t * cp1.y +
+                  3 * u * t * t * cp2.y +
+                  t * t * t * b.y;
+                return (
+                  <g transform={`translate(${labelX}, ${labelY})`}>
+                    <rect x={-opLabelW / 2} y={-9} width={opLabelW} height={18} rx={9} fill="white" stroke="#E2E8F0" strokeWidth={1} />
+                    <text x={0} y={4} textAnchor="middle" fontSize="10" fontFamily="ui-monospace, monospace" fill={isConstraint ? '#D97706' : '#4B5563'}>
+                      {e.op}
+                    </text>
+                  </g>
+                );
+              })()}
             </g>
           );
         })}
@@ -936,7 +1039,7 @@ function BoxLineDiagram({
           const stroke = b.kind === 'final' ? '#319795' : b.binds ? '#319795' : '#CBD5E1';
           const labelColor = b.kind === 'final' ? '#FFFFFF' : '#000000';
           const valueColor = b.kind === 'final' ? '#FFFFFF' : b.binds ? '#319795' : '#000000';
-          const subColor = b.kind === 'final' ? '#B2F5EA' : '#9CA3AF';
+          const subColor = b.kind === 'final' ? '#B2F5EA' : '#374151';
           return (
             <g key={b.id}>
               <rect
@@ -960,9 +1063,14 @@ function BoxLineDiagram({
               )}
               {b.subtitle &&
                 (Array.isArray(b.subtitle) ? b.subtitle : [b.subtitle]).map((line, i) => {
-                  // Status notes wrapped in parens — e.g. "(not binding here)" —
-                  // get bolder/darker styling so the user notices them.
-                  const isStatus = line.trim().startsWith('(');
+                  const handleTooltipShow = b.subtitleTooltip
+                    ? (e: React.MouseEvent<SVGTextElement>) => {
+                        e.stopPropagation();
+                        const rect = (e.currentTarget.ownerSVGElement as SVGSVGElement).getBoundingClientRect();
+                        // Approximate cursor position relative to viewport.
+                        setTooltip({ text: b.subtitleTooltip!, x: e.clientX, y: rect.top + (e.clientY - rect.top) });
+                      }
+                    : undefined;
                   return (
                     <text
                       key={i}
@@ -970,11 +1078,11 @@ function BoxLineDiagram({
                       y={b.y + 52 + i * 11}
                       textAnchor="middle"
                       fontSize="9"
-                      fill={isStatus ? '#374151' : '#9CA3AF'}
-                      fontWeight={isStatus ? 600 : 400}
+                      fill="#374151"
+                      fontWeight={400}
                       style={b.subtitleTooltip ? { cursor: 'help' } : undefined}
+                      onClick={handleTooltipShow}
                     >
-                      {b.subtitleTooltip && <title>{b.subtitleTooltip}</title>}
                       {line}
                     </text>
                   );
@@ -987,6 +1095,23 @@ function BoxLineDiagram({
         })}
 
       </svg>
+      {tooltip &&
+        createPortal(
+          <div
+            data-subtitle-popover
+            style={{
+              position: 'fixed',
+              top: Math.min(tooltip.y + 12, window.innerHeight - 200),
+              left: Math.min(Math.max(tooltip.x - 144, 8), window.innerWidth - 296),
+              width: 288,
+              zIndex: 50,
+            }}
+            className="p-3 bg-white rounded-pe-lg shadow-lg border border-pe-gray-200 text-xs text-pe-text-primary leading-relaxed"
+          >
+            {tooltip.text}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
@@ -1081,15 +1206,32 @@ export default function CalculatorView() {
     });
   };
 
+  // Track the in-flight calculation so a stale response can't land
+  // after the user has started editing inputs (which would briefly
+  // re-show the diagram and then vanish on the next keystroke).
+  const calcAbortRef = useRef<AbortController | null>(null);
+
   const handleChange = useCallback((name: string, value: any) => {
     setInputs((prev) => ({ ...prev, [name]: value }));
     // Stale-result protection: any input change blanks the displayed
-    // result until the user hits Calculate again.
+    // result until the user hits Calculate again, AND aborts any
+    // in-flight calculation so its delayed response can't restore
+    // the diagram out from under the user.
     setResult(null);
     setError(null);
+    setLoading(false);
+    if (calcAbortRef.current) {
+      calcAbortRef.current.abort();
+      calcAbortRef.current = null;
+    }
   }, []);
 
   const handleCalculate = async () => {
+    // Cancel any prior request that's still pending.
+    calcAbortRef.current?.abort();
+    const controller = new AbortController();
+    calcAbortRef.current = controller;
+
     setLoading(true);
     setError(null);
     try {
@@ -1097,18 +1239,27 @@ export default function CalculatorView() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(inputs),
+        signal: controller.signal,
       });
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
         throw new Error(detail?.detail || `HTTP ${res.status}`);
       }
       const data = await res.json();
+      // Only apply if this is still the current request.
+      if (calcAbortRef.current !== controller) return;
       setResult(data);
       setHasCalculated(true);
     } catch (err) {
+      // Silently swallow aborts — the user moved on, that's expected.
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      if (calcAbortRef.current !== controller) return;
       setError(err instanceof Error ? err.message : 'Calculation failed');
     } finally {
-      setLoading(false);
+      if (calcAbortRef.current === controller) {
+        setLoading(false);
+        calcAbortRef.current = null;
+      }
     }
   };
 
@@ -1125,10 +1276,11 @@ export default function CalculatorView() {
         aria-label="QBI deduction inputs"
       >
         <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleCalculate();
-          }}
+          // The Calculate button is the ONLY trigger for a calculation.
+          // Auto-submitting on Enter (e.g. while typing in a number
+          // field) would unexpectedly populate the diagram before the
+          // user is ready, so we swallow the form submission here.
+          onSubmit={(e) => e.preventDefault()}
           className="flex flex-col flex-1"
         >
         <div className="p-5 pb-3 flex-1">
@@ -1311,7 +1463,8 @@ export default function CalculatorView() {
         {/* Sticky calculate button */}
         <div className="sticky bottom-0 bg-white border-t border-pe-gray-200 p-4">
           <button
-            type="submit"
+            type="button"
+            onClick={handleCalculate}
             disabled={loading}
             className="w-full py-2.5 bg-pe-teal-500 text-white rounded-pe-lg font-medium hover:bg-pe-teal-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
           >
@@ -1365,41 +1518,48 @@ export default function CalculatorView() {
           const displayOutputs: Outputs = result?.outputs ?? {};
           return (
             <div className="max-w-6xl mx-auto">
-              {isStale && (
-                <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-pe-lg text-sm text-amber-800 flex items-center justify-between gap-4">
-                  <span>
+              {isStale ? (
+                // Pre-calc / stale state: hide the diagram entirely.
+                // A blank/zeroed graph was confusing — users couldn't tell
+                // whether the diagram reflected the current inputs or
+                // whether values were placeholders. The Calculate button
+                // is the explicit gate now.
+                <div className="p-8 bg-white border border-pe-gray-200 rounded-pe-lg text-center">
+                  <p className="text-sm text-pe-text-secondary">
                     {hasCalculated
-                      ? <>Inputs changed — click <span className="font-semibold">Calculate</span> to refresh the computed values.</>
-                      : <>Click <span className="font-semibold">Calculate</span> to populate the diagram with computed values.</>}
-                  </span>
+                      ? <>Inputs changed — click <span className="font-semibold text-pe-text-primary">Calculate</span> to refresh the diagram.</>
+                      : <>Enter your inputs on the left and click <span className="font-semibold text-pe-text-primary">Calculate</span> to see the §199A computation diagram.</>}
+                  </p>
                 </div>
+              ) : (
+                <>
+                  {/* Tabs: numerical breakdown vs computation graph */}
+                  <div className="mb-3 flex items-center gap-1 bg-pe-gray-100 p-1 rounded-pe-lg w-fit">
+                    {[
+                      { id: 'diagram' as const, label: 'Diagram' },
+                      { id: 'breakdown' as const, label: 'Breakdown' },
+                    ].map((tab) => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setResultTab(tab.id)}
+                        className={`px-3 py-1.5 rounded-pe-md text-xs font-medium transition-all ${
+                          resultTab === tab.id
+                            ? 'bg-white text-pe-text-primary shadow-sm'
+                            : 'text-pe-text-secondary hover:text-pe-text-primary'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {resultTab === 'breakdown' ? (
+                    <BreakdownStaged outputs={displayOutputs} />
+                  ) : (
+                    <BoxLineDiagram outputs={displayOutputs} inputs={inputs} parameters={result?.parameters} stale={isStale} />
+                  )}
+                </>
               )}
-
-                {/* Tabs: numerical breakdown vs computation graph */}
-                <div className="mb-3 flex items-center gap-1 bg-pe-gray-100 p-1 rounded-pe-lg w-fit">
-                  {[
-                    { id: 'diagram' as const, label: 'Diagram' },
-                    { id: 'breakdown' as const, label: 'Breakdown' },
-                  ].map((tab) => (
-                    <button
-                      key={tab.id}
-                      onClick={() => setResultTab(tab.id)}
-                      className={`px-3 py-1.5 rounded-pe-md text-xs font-medium transition-all ${
-                        resultTab === tab.id
-                          ? 'bg-white text-pe-text-primary shadow-sm'
-                          : 'text-pe-text-secondary hover:text-pe-text-primary'
-                      }`}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
-
-                {resultTab === 'breakdown' ? (
-                  <BreakdownStaged outputs={displayOutputs} />
-                ) : (
-                  <BoxLineDiagram outputs={displayOutputs} inputs={inputs} parameters={result?.parameters} stale={isStale} />
-                )}
 
                 {/* Parameters Used — collapsible (hidden when stale) */}
                 {result && result.parameters && Object.keys(result.parameters).length > 0 && (
@@ -1412,9 +1572,6 @@ export default function CalculatorView() {
                         <Chevron open={parametersOpen} />
                         <span className="text-sm font-semibold text-pe-text-primary">
                           Model parameters ({result.year})
-                        </span>
-                        <span className="text-xs text-pe-text-tertiary">
-                          ({Object.keys(result.parameters).length})
                         </span>
                       </div>
                     </button>
