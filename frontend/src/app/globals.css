@@ -1,0 +1,107 @@
+@import "tailwindcss";
+@import "@policyengine/ui-kit/theme.css";
+
+/* PolicyEngine design tokens — preserved from the original Tailwind 3
+ * config so that the heavy `bg-pe-*`, `text-pe-*`, `border-pe-*`,
+ * `rounded-pe-*` utility usage across components keeps working under
+ * Tailwind v4. */
+@theme {
+  --color-pe-teal-50: #E6FFFA;
+  --color-pe-teal-100: #B2F5EA;
+  --color-pe-teal-200: #81E6D9;
+  --color-pe-teal-300: #4FD1C5;
+  --color-pe-teal-400: #38B2AC;
+  --color-pe-teal-500: #319795;
+  --color-pe-teal-600: #2C7A7B;
+  --color-pe-teal-700: #285E61;
+  --color-pe-teal-800: #234E52;
+  --color-pe-teal-900: #1D4044;
+
+  --color-pe-blue-500: #0EA5E9;
+  --color-pe-blue-700: #026AA2;
+
+  --color-pe-gray-50: #F9FAFB;
+  --color-pe-gray-100: #F2F4F7;
+  --color-pe-gray-200: #E2E8F0;
+  --color-pe-gray-300: #CBD5E1;
+  --color-pe-gray-500: #6B7280;
+  --color-pe-gray-600: #4B5563;
+  --color-pe-gray-700: #344054;
+
+  --color-pe-bg-primary: #FFFFFF;
+  --color-pe-bg-secondary: #F5F9FF;
+  --color-pe-bg-tertiary: #F1F5F9;
+
+  --color-pe-text-primary: #000000;
+  --color-pe-text-secondary: #5A5A5A;
+  --color-pe-text-tertiary: #9CA3AF;
+
+  --color-pe-success: #22C55E;
+  --color-pe-error: #EF4444;
+  --color-pe-warning: #FEC601;
+  --color-pe-info: #1890FF;
+
+  --font-sans: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', Menlo, Monaco, Consolas, monospace;
+
+  --radius-pe-sm: 4px;
+  --radius-pe-md: 6px;
+  --radius-pe-lg: 8px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #FFFFFF;
+  color: #000000;
+}
+
+code {
+  font-family: 'JetBrains Mono', Menlo, Monaco, Consolas, monospace;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F2F4F7;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #6B7280;
+}
+
+input[type="checkbox"]:checked {
+  accent-color: #319795;
+}
+
+/* App layout (was App.css) */
+.App {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+header {
+  flex-shrink: 0;
+}
+
+main {
+  flex: 1;
+  overflow: hidden;
+}
