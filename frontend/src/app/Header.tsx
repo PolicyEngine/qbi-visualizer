@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { assetUrl } from '../utils/api';
 
 export default function Header() {
   const pathname = usePathname() || '/';
@@ -14,7 +15,7 @@ export default function Header() {
           <Link href="/" className="flex items-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/policyengine-logo.png"
+              src={assetUrl('/policyengine-logo.png')}
               alt="PolicyEngine"
               width={154}
               height={32}
