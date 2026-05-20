@@ -98,10 +98,9 @@ export const metadata: Metadata = {
       'Free interactive Qualified Business Income Deduction calculator powered by PolicyEngine US.',
     images: [{ url: OG_IMAGE }],
   },
-  icons: {
-    icon: '/favicon.svg',
-    apple: '/favicon.svg',
-  },
+  // Icons emitted via the Next.js file convention (`app/icon.svg`).
+  // Do not list URLs in `metadata.icons` — those are not basePath-prefixed
+  // and would 404 under the multi-zone host. See vercel/next.js#61487.
 };
 
 export const viewport: Viewport = {

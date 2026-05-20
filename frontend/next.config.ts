@@ -1,12 +1,7 @@
 import type { NextConfig } from 'next';
 
-const basePath =
-  process.env.NEXT_PUBLIC_BASE_PATH === ''
-    ? undefined
-    : process.env.NEXT_PUBLIC_BASE_PATH || '/us/qbi-calculator';
-
 const nextConfig: NextConfig = {
-  ...(basePath ? { basePath } : {}),
+  basePath: '/us/qbi-calculator',
   turbopack: {
     root: process.cwd(),
   },

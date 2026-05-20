@@ -7,12 +7,5 @@
       "source": "/us/qbi-calculator/api/:path*",
       "destination": "https://policyengine--qbi-visualizer-backend-web.modal.run/api/:path*"
     }
-  ],
-  "redirects": [
-    {
-      "source": "/",
-      "destination": "/us/qbi-calculator",
-      "permanent": false
-    }
   ]
 }
