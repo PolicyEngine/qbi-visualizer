@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
-import Header from './Header';
+import { ShellHeader, ShellFooter } from './Shell';
+import SubHeader from './SubHeader';
 import './globals.css';
 
 const SITE_URL = 'https://qbi-visualizer.vercel.app';
@@ -98,10 +99,9 @@ export const metadata: Metadata = {
       'Free interactive Qualified Business Income Deduction calculator powered by PolicyEngine US.',
     images: [{ url: OG_IMAGE }],
   },
-  icons: {
-    icon: '/favicon.svg',
-    apple: '/favicon.svg',
-  },
+  // Icons emitted via the Next.js file convention (`app/icon.svg`).
+  // Do not list URLs in `metadata.icons` — those are not basePath-prefixed
+  // and would 404 under the multi-zone host. See vercel/next.js#61487.
 };
 
 export const viewport: Viewport = {
@@ -128,9 +128,11 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <div className="App flex flex-col h-screen bg-pe-bg-primary">
-          <Header />
+        <div className="App flex flex-col min-h-screen bg-pe-bg-primary">
+          <ShellHeader />
+          <SubHeader />
           <main className="flex-1 overflow-hidden">{children}</main>
+          <ShellFooter />
         </div>
       </body>
     </html>

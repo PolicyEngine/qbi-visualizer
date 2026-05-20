@@ -7,6 +7,7 @@ import {
   LawSection,
   ImplementationStatus,
 } from '../types/law';
+import { apiUrl } from '../utils/api';
 
 type ViewMode = 'flowchart' | 'code-mapping' | 'adjacent';
 
@@ -648,7 +649,7 @@ export default function LawView() {
   const fetchStructure = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/api/law/structure');
+      const response = await axios.get(apiUrl('/api/law/structure'));
       setStructure(response.data);
     } catch (err) {
       setError('Failed to load law structure');

@@ -4,7 +4,7 @@
   "framework": "nextjs",
   "rewrites": [
     {
-      "source": "/api/:path*",
+      "source": "/us/qbi-calculator/api/:path*",
       "destination": "https://policyengine--qbi-visualizer-backend-web.modal.run/api/:path*"
     }
   ]

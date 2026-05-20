@@ -1,6 +1,7 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
+  basePath: '/us/qbi-calculator',
   turbopack: {
     root: process.cwd(),
   },

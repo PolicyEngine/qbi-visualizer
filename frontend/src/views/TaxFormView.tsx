@@ -8,6 +8,7 @@ import {
   FormScheduleMapping,
   FormImplementationStatus,
 } from '../types/taxForm';
+import { apiUrl } from '../utils/api';
 
 type TabType = 'overview' | 'form8995' | 'form8995a' | 'gaps';
 
@@ -23,7 +24,7 @@ function TaxFormView() {
 
   const fetchFormMapping = async () => {
     try {
-      const res = await fetch('/api/forms/mapping');
+      const res = await fetch(apiUrl('/api/forms/mapping'));
       if (!res.ok) throw new Error('Failed to fetch form mapping');
       const result = await res.json();
       setData(result);

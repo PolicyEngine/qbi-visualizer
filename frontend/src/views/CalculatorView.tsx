@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { InfoTooltip } from '../components/InfoTooltip';
 import { INPUT_DEFINITIONS, QUALIFIED_FLAG_DEFINITION } from '../data/inputDefinitions';
+import { apiUrl } from '../utils/api';
 
 interface InputDef {
   name: string;
@@ -1237,7 +1238,7 @@ export default function CalculatorView() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/qbi/calculate', {
+      const res = await fetch(apiUrl('/api/qbi/calculate'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(inputs),
