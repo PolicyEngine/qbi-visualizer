@@ -1,6 +1,6 @@
 'use client';
 
-import { Header, Footer } from '@policyengine/ui-kit/layout';
+import { Header } from '@policyengine/ui-kit/layout';
 import type { NavItemConfig, CountryConfig } from '@policyengine/ui-kit/layout';
 
 const NAV_ITEMS: NavItemConfig[] = [
@@ -24,14 +24,6 @@ const COUNTRIES: CountryConfig[] = [
   { id: 'uk', label: 'United Kingdom' },
 ];
 
-const FOOTER_LINKS = [
-  { href: 'https://policyengine.org/us/research', text: 'Research' },
-  { href: 'https://policyengine.org/us/model', text: 'Model' },
-  { href: 'https://policyengine.org/us/api', text: 'API' },
-  { href: 'https://policyengine.org/us/team', text: 'Team' },
-  { href: 'https://policyengine.org/us/donate', text: 'Donate' },
-];
-
 export function ShellHeader() {
   return (
     <Header
@@ -44,8 +36,4 @@ export function ShellHeader() {
       }}
     />
   );
-}
-
-export function ShellFooter() {
-  return <Footer links={FOOTER_LINKS} />;
 }
