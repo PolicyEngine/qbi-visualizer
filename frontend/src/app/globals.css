@@ -49,11 +49,11 @@
   --radius-pe-lg: 8px;
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+/* Tailwind 4's preflight already resets margin/padding/box-sizing on
+ * everything that needs it. A blanket `* { padding: 0; margin: 0 }`
+ * here was overriding every Tailwind padding utility (py-2.5, p-4, …)
+ * because the universal selector beats the utility classes once
+ * Tailwind 4 stops emitting them with higher specificity. */
 
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -90,18 +90,8 @@ input[type="checkbox"]:checked {
   accent-color: #319795;
 }
 
-/* App layout (was App.css) */
-.App {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
-
-header {
-  flex-shrink: 0;
-}
-
-main {
-  flex: 1;
-  overflow: hidden;
-}
+/* Layout is now driven by the `flex flex-col h-screen` + `flex-1
+ * overflow-hidden` utility classes on the wrapper in layout.tsx, so
+ * the legacy `.App` / global `header` / `main` rules from App.css
+ * aren't needed (and the broad `header` rule was applying to the
+ * ui-kit shell header too). */
