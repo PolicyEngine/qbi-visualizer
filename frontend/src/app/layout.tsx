@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
-import Header from './Header';
+import { ShellHeader, ShellFooter } from './Shell';
+import SubHeader from './SubHeader';
 import './globals.css';
 
 const SITE_URL = 'https://qbi-visualizer.vercel.app';
@@ -127,9 +128,11 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <div className="App flex flex-col h-screen bg-pe-bg-primary">
-          <Header />
+        <div className="App flex flex-col min-h-screen bg-pe-bg-primary">
+          <ShellHeader />
+          <SubHeader />
           <main className="flex-1 overflow-hidden">{children}</main>
+          <ShellFooter />
         </div>
       </body>
     </html>
