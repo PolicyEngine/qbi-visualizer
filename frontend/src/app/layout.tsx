@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { ShellHeader, ShellFooter } from './Shell';
+import { ShellHeader } from './Shell';
 import SubHeader from './SubHeader';
 import './globals.css';
 
@@ -128,11 +128,10 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <div className="App flex flex-col min-h-screen bg-pe-bg-primary">
+        <div className="App flex flex-col h-screen bg-pe-bg-primary">
           <ShellHeader />
           <SubHeader />
           <main className="flex-1 overflow-hidden">{children}</main>
-          <ShellFooter />
         </div>
       </body>
     </html>
