@@ -41,8 +41,11 @@
   --color-pe-warning: #FEC601;
   --color-pe-info: #1890FF;
 
-  --font-sans: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-mono: 'JetBrains Mono', Menlo, Monaco, Consolas, monospace;
+  /* `--font-inter` and `--font-jetbrains-mono` are emitted by next/font
+   * in app/layout.tsx; fall back to local stacks if the variables are
+   * unset (e.g. CSS preview tools). */
+  --font-sans: var(--font-inter), Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: var(--font-jetbrains-mono), 'JetBrains Mono', Menlo, Monaco, Consolas, monospace;
 
   --radius-pe-sm: 4px;
   --radius-pe-md: 6px;
@@ -56,7 +59,7 @@
  * Tailwind 4 stops emitting them with higher specificity. */
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--font-inter), 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: #FFFFFF;
@@ -64,7 +67,7 @@ body {
 }
 
 code {
-  font-family: 'JetBrains Mono', Menlo, Monaco, Consolas, monospace;
+  font-family: var(--font-jetbrains-mono), 'JetBrains Mono', Menlo, Monaco, Consolas, monospace;
 }
 
 /* Custom scrollbar */

@@ -1,8 +1,8 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { assetUrl } from '../utils/api';
 
 /**
  * Tool brand bar shown directly under the PolicyEngine multi-zone shell.
@@ -19,13 +19,16 @@ export default function SubHeader() {
       <div className="flex items-center justify-between max-w-7xl mx-auto">
         <div className="flex items-center gap-4">
           <Link href="/" className="flex items-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={assetUrl('/policyengine-logo.png')}
+            {/* next/image auto-prefixes the multizone basePath for
+             * root-relative paths, so the raw `/policyengine-logo.png`
+             * resolves under `/us/qbi-calculator/...`. */}
+            <Image
+              src="/policyengine-logo.png"
               alt="PolicyEngine"
               width={154}
               height={32}
               className="h-8 w-auto"
+              priority
             />
           </Link>
           <div className="border-l border-pe-gray-200 pl-4">

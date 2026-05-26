@@ -1,13 +1,40 @@
 import type { Metadata, Viewport } from 'next';
+import { Inter, JetBrains_Mono } from 'next/font/google';
 import { ShellHeader } from './Shell';
 import SubHeader from './SubHeader';
 import './globals.css';
 
 const SITE_URL = 'https://qbi-visualizer.vercel.app';
+// The app is mounted under a multizone basePath. The canonical, OG, and
+// sitemap URLs MUST include it — sub-pages live at e.g.
+// `/us/qbi-calculator/law`, never at the host root.
+const BASE_PATH = '/us/qbi-calculator';
+const CANONICAL_URL = `${SITE_URL}${BASE_PATH}/`;
+// Absolute OG image URL with basePath baked in. We serve the generated
+// PNG from a custom route (`/og`) rather than the `opengraph-image.tsx`
+// file convention, because the file convention's auto-emitted `og:image`
+// resolves against `metadataBase` (the host root) and omits the
+// multizone basePath, so social crawlers would 404.
+const OG_IMAGE_URL = `${SITE_URL}${BASE_PATH}/og`;
 const TITLE = 'QBI Deduction Calculator (IRC §199A) | PolicyEngine';
 const DESCRIPTION =
   'Free interactive Qualified Business Income Deduction calculator powered by PolicyEngine US. Models §199A phase-in, W-2 wage and UBIA limits, SSTB phase-out, and REIT/PTP income for any filing status and tax year.';
-const OG_IMAGE = `${SITE_URL}/og-image.svg`;
+
+// Self-hosted via next/font — eliminates the render-blocking Google
+// Fonts `<link>` tags, ships only the subsets the page uses, and exposes
+// CSS variables that `globals.css` can fall through to.
+const inter = Inter({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
+  variable: '--font-inter',
+});
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500'],
+  display: 'swap',
+  variable: '--font-jetbrains-mono',
+});
 
 const jsonLdGraph = {
   '@context': 'https://schema.org',
@@ -16,7 +43,7 @@ const jsonLdGraph = {
       '@type': 'WebApplication',
       name: 'QBI Deduction Calculator',
       alternateName: 'Section 199A Calculator',
-      url: `${SITE_URL}/`,
+      url: CANONICAL_URL,
       applicationCategory: 'FinanceApplication',
       operatingSystem: 'Any',
       description:
@@ -81,15 +108,23 @@ export const metadata: Metadata = {
   title: TITLE,
   description: DESCRIPTION,
   authors: [{ name: 'PolicyEngine' }],
-  alternates: { canonical: `${SITE_URL}/` },
+  alternates: { canonical: CANONICAL_URL },
   openGraph: {
     type: 'website',
     title: 'QBI Deduction Calculator (IRC §199A)',
     description:
       'Free interactive Qualified Business Income Deduction calculator powered by PolicyEngine US. Models phase-in, W-2 wage and UBIA limits, and SSTB phase-out.',
-    url: `${SITE_URL}/`,
+    url: CANONICAL_URL,
     siteName: 'PolicyEngine',
-    images: [{ url: OG_IMAGE }],
+    images: [
+      {
+        url: OG_IMAGE_URL,
+        width: 1200,
+        height: 630,
+        type: 'image/png',
+        alt: 'QBI Deduction Calculator (IRC §199A) — PolicyEngine',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
@@ -97,7 +132,7 @@ export const metadata: Metadata = {
     title: 'QBI Deduction Calculator (IRC §199A)',
     description:
       'Free interactive Qualified Business Income Deduction calculator powered by PolicyEngine US.',
-    images: [{ url: OG_IMAGE }],
+    images: [OG_IMAGE_URL],
   },
   // Icons emitted via the Next.js file convention (`app/icon.svg`).
   // Do not list URLs in `metadata.icons` — those are not basePath-prefixed
@@ -114,14 +149,8 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
-          rel="stylesheet"
-        />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdGraph) }}
