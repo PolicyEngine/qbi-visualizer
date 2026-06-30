@@ -14,6 +14,19 @@ const nextConfig: NextConfig = {
         : 'https://policyengine--qbi-visualizer-backend-web.modal.run';
     return [{ source: '/api/:path*', destination: `${target}/api/:path*` }];
   },
+  // The app is served under basePath, so the bare domain root has nothing.
+  // Redirect it to the app so the standalone Vercel URL isn't a dead 404.
+  // basePath: false keeps the source matched at the true origin root.
+  async redirects() {
+    return [
+      {
+        source: '/',
+        destination: '/us/qbi-calculator',
+        basePath: false,
+        permanent: false,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
