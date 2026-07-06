@@ -42,19 +42,28 @@ image = (
 
 app = modal.App("qbi-visualizer-backend", image=image)
 
+# Import the FastAPI app (and transitively policyengine-us, ~5-10s) at
+# container boot, inside image.imports() so it only runs remotely. With
+# enable_memory_snapshot below, Modal snapshots the process AFTER this
+# import completes, so later cold starts restore the already-imported
+# process in ~1-2s instead of re-importing.
+with image.imports():
+    from app.main import app as fastapi_app
+
 
 @app.function(
     timeout=120,
-    # Keep warm containers around for 5 minutes after the last request —
-    # PolicyEngine imports take ~5-10s, which dominates first-request latency.
-    # Bump to min_containers=1 if cold starts become annoying.
+    # Keep warm containers around for 5 minutes after the last request.
     scaledown_window=300,
-    # Cost cap: each container pays the full policyengine-us import and each
-    # request burns real CPU-seconds, so bound how far a burst can scale out.
+    # Cost cap: each request burns real CPU-seconds, so bound how far a
+    # burst can scale out.
     max_containers=5,
+    # Snapshot process memory after the policyengine-us import (see above).
+    # The first couple of cold boots build snapshots at full cost; every
+    # cold start after that restores from snapshot. Bump to
+    # min_containers=1 instead if even snapshot restores feel slow.
+    enable_memory_snapshot=True,
 )
 @modal.asgi_app()
 def web():
-    from app.main import app as fastapi_app
-
     return fastapi_app
