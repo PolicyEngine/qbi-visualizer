@@ -100,3 +100,103 @@ def test_qbi_calculate_returns_parameters():
     body = r.json()
     assert "parameters" in body
     assert body["parameters"]["max_rate"] == 0.20
+
+
+def _calc(**kwargs):
+    """POST /calculate with defaults and return the parsed 200 body."""
+    r = client.post("/api/qbi/calculate", json={"year": 2025, **kwargs})
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+# $250k QBI sits between the 2025 SINGLE ($197,300) and JOINT ($394,600)
+# phase-out thresholds, so filing status visibly changes the result.
+PHASE_OUT_STRADDLING_INCOME = 250_000
+
+QBID = "qualified_business_income_deduction"
+
+
+@pytest.mark.parametrize(
+    "filing_status",
+    ["SINGLE", "JOINT", "SEPARATE", "HEAD_OF_HOUSEHOLD", "SURVIVING_SPOUSE"],
+)
+def test_qbi_calculate_simulation_applies_requested_filing_status(filing_status):
+    """The response echoes the *simulation's* filing_status output — it must
+    match the request for every supported status (regression for the bug
+    where HOH/SEPARATE computed as SINGLE and SURVIVING_SPOUSE as JOINT)."""
+    body = _calc(filing_status=filing_status, self_employment_income=50_000)
+    assert body["filing_status"] == filing_status
+    assert body["errors"] == {}
+    assert body["outputs"][QBID] > 0
+
+
+def test_qbi_calculate_phase_out_params_differ_single_vs_joint():
+    single = _calc(filing_status="SINGLE")["parameters"]
+    joint = _calc(filing_status="JOINT")["parameters"]
+    assert single["phase_out_start"] == single["phase_out_start_single"]
+    assert joint["phase_out_start"] == joint["phase_out_start_joint"]
+    assert joint["phase_out_start"] > single["phase_out_start"]
+    assert joint["phase_out_length"] > single["phase_out_length"]
+
+
+def test_qbi_calculate_filing_status_changes_phase_out_outcome():
+    """Same income straddling the SINGLE threshold: JOINT and SURVIVING_SPOUSE
+    (no living spouse, joint-level thresholds) get the full deduction, SINGLE
+    gets a phased-out one."""
+    single = _calc(
+        filing_status="SINGLE",
+        self_employment_income=PHASE_OUT_STRADDLING_INCOME,
+    )
+    joint = _calc(
+        filing_status="JOINT",
+        self_employment_income=PHASE_OUT_STRADDLING_INCOME,
+    )
+    surviving = _calc(
+        filing_status="SURVIVING_SPOUSE",
+        self_employment_income=PHASE_OUT_STRADDLING_INCOME,
+    )
+    # Surviving spouse files alone but uses joint thresholds — with a
+    # no-income spouse, the joint result matches exactly.
+    assert surviving["outputs"][QBID] == joint["outputs"][QBID]
+    assert surviving["outputs"][QBID] > single["outputs"][QBID]
+    assert surviving["parameters"]["phase_out_start"] == (
+        joint["parameters"]["phase_out_start_joint"]
+    )
+
+
+def test_qbi_calculate_negative_income_loss():
+    """A business loss yields zero QBID (no negative deduction)."""
+    body = _calc(filing_status="SINGLE", self_employment_income=-50_000)
+    assert body["errors"] == {}
+    assert body["outputs"][QBID] == 0
+    assert body["outputs"]["adjusted_gross_income"] < 0
+
+
+def test_qbi_calculate_above_threshold_wage_limitation():
+    """Above the fully-phased-in threshold, the W-2 wage limitation binds:
+    zero wages/UBIA means zero QBID; sufficient wages restore it."""
+    no_wages = _calc(filing_status="SINGLE", self_employment_income=500_000)
+    assert no_wages["outputs"][QBID] == 0
+    with_wages = _calc(
+        filing_status="SINGLE",
+        self_employment_income=500_000,
+        w2_wages_from_qualified_business=200_000,
+    )
+    assert with_wages["outputs"][QBID] > 0
+
+
+@pytest.mark.parametrize(
+    "bad_field",
+    [
+        {"filing_status": "MARRIED"},
+        {"filing_status": "single"},
+        {"state_code": "ZZ"},
+        {"year": 2017},
+        {"year": 2050},
+        {"self_employment_income": 1e12},
+        {"employment_income": -1e12},
+    ],
+)
+def test_qbi_calculate_invalid_input_returns_422(bad_field):
+    r = client.post("/api/qbi/calculate", json={"year": 2025, **bad_field})
+    assert r.status_code == 422

@@ -1,6 +1,6 @@
 """Service to build law-structured QBID representation."""
 
-from typing import Dict, List, Optional
+from functools import lru_cache
 from app.models.law_structure import (
     QBIDLawStructure,
     LawSection,
@@ -18,25 +18,27 @@ GITHUB_BASE = "https://github.com/PolicyEngine/policyengine-us/blob/master"
 CORNELL_BASE = "https://www.law.cornell.edu/uscode/text/26/199A"
 
 
-def build_qbid_law_structure(
-    variables: Dict,
-    parameters: Dict,
-) -> QBIDLawStructure:
-    """Build the complete law-structured representation of QBID."""
+@lru_cache(maxsize=1)
+def build_qbid_law_structure() -> QBIDLawStructure:
+    """Build the complete law-structured representation of QBID.
+
+    The structure is static per process, so cache it instead of rebuilding
+    it on every request.
+    """
 
     sections = [
-        _build_section_a_allowance(variables, parameters),
-        _build_section_b1_combined_qbi(variables, parameters),
-        _build_section_b2_wage_limitation(variables, parameters),
-        _build_section_b3_phaseout(variables, parameters),
-        _build_section_c_qbi_definition(variables, parameters),
-        _build_section_c2_loss_carryover(variables, parameters),
-        _build_section_c3_exclusions(variables, parameters),
-        _build_section_d_qualified_business(variables, parameters),
-        _build_section_d2_sstb(variables, parameters),
-        _build_section_e_thresholds(variables, parameters),
-        _build_section_i_minimum_deduction(variables, parameters),
-        _build_section_g_cooperatives(variables, parameters),
+        _build_section_a_allowance(),
+        _build_section_b1_combined_qbi(),
+        _build_section_b2_wage_limitation(),
+        _build_section_b3_phaseout(),
+        _build_section_c_qbi_definition(),
+        _build_section_c2_loss_carryover(),
+        _build_section_c3_exclusions(),
+        _build_section_d_qualified_business(),
+        _build_section_d2_sstb(),
+        _build_section_e_thresholds(),
+        _build_section_i_minimum_deduction(),
+        _build_section_g_cooperatives(),
     ]
 
     # Count implementation status
@@ -57,7 +59,7 @@ def build_qbid_law_structure(
     )
 
 
-def _build_section_a_allowance(variables: Dict, parameters: Dict) -> LawSection:
+def _build_section_a_allowance() -> LawSection:
     """§199A(a) - Allowance of deduction."""
     return LawSection(
         id="sec_a_allowance",
@@ -120,7 +122,7 @@ def _build_section_a_allowance(variables: Dict, parameters: Dict) -> LawSection:
     )
 
 
-def _build_section_b1_combined_qbi(variables: Dict, parameters: Dict) -> LawSection:
+def _build_section_b1_combined_qbi() -> LawSection:
     """§199A(b)(1) - Combined QBI amount."""
     return LawSection(
         id="sec_b1_combined_qbi",
@@ -184,7 +186,7 @@ def _build_section_b1_combined_qbi(variables: Dict, parameters: Dict) -> LawSect
     )
 
 
-def _build_section_b2_wage_limitation(variables: Dict, parameters: Dict) -> LawSection:
+def _build_section_b2_wage_limitation() -> LawSection:
     """§199A(b)(2) - W-2 wage limitation."""
     return LawSection(
         id="sec_b2_wage_limitation",
@@ -263,7 +265,7 @@ def _build_section_b2_wage_limitation(variables: Dict, parameters: Dict) -> LawS
     )
 
 
-def _build_section_b3_phaseout(variables: Dict, parameters: Dict) -> LawSection:
+def _build_section_b3_phaseout() -> LawSection:
     """§199A(b)(3) - Phase-in of limitation."""
     return LawSection(
         id="sec_b3_phaseout",
@@ -348,7 +350,7 @@ def _build_section_b3_phaseout(variables: Dict, parameters: Dict) -> LawSection:
     )
 
 
-def _build_section_c_qbi_definition(variables: Dict, parameters: Dict) -> LawSection:
+def _build_section_c_qbi_definition() -> LawSection:
     """§199A(c) - Qualified business income definition."""
     return LawSection(
         id="sec_c_qbi_definition",
@@ -436,7 +438,7 @@ def _build_section_c_qbi_definition(variables: Dict, parameters: Dict) -> LawSec
     )
 
 
-def _build_section_c2_loss_carryover(variables: Dict, parameters: Dict) -> LawSection:
+def _build_section_c2_loss_carryover() -> LawSection:
     """§199A(c)(2) - Loss carryforward."""
     return LawSection(
         id="sec_c2_loss_carryover",
@@ -469,7 +471,7 @@ def _build_section_c2_loss_carryover(variables: Dict, parameters: Dict) -> LawSe
     )
 
 
-def _build_section_c3_exclusions(variables: Dict, parameters: Dict) -> LawSection:
+def _build_section_c3_exclusions() -> LawSection:
     """§199A(c)(3)(B) - Items not included in QBI."""
     return LawSection(
         id="sec_c3_exclusions",
@@ -505,7 +507,7 @@ def _build_section_c3_exclusions(variables: Dict, parameters: Dict) -> LawSectio
     )
 
 
-def _build_section_d_qualified_business(variables: Dict, parameters: Dict) -> LawSection:
+def _build_section_d_qualified_business() -> LawSection:
     """§199A(d)(1) - Qualified trade or business."""
     return LawSection(
         id="sec_d_qualified_business",
@@ -537,7 +539,7 @@ def _build_section_d_qualified_business(variables: Dict, parameters: Dict) -> La
     )
 
 
-def _build_section_d2_sstb(variables: Dict, parameters: Dict) -> LawSection:
+def _build_section_d2_sstb() -> LawSection:
     """§199A(d)(2) - Specified service trade or business."""
     return LawSection(
         id="sec_d2_sstb",
@@ -586,7 +588,7 @@ def _build_section_d2_sstb(variables: Dict, parameters: Dict) -> LawSection:
     )
 
 
-def _build_section_e_thresholds(variables: Dict, parameters: Dict) -> LawSection:
+def _build_section_e_thresholds() -> LawSection:
     """§199A(e) - Threshold amounts."""
     return LawSection(
         id="sec_e_thresholds",
@@ -631,7 +633,7 @@ def _build_section_e_thresholds(variables: Dict, parameters: Dict) -> LawSection
     )
 
 
-def _build_section_i_minimum_deduction(variables: Dict, parameters: Dict) -> LawSection:
+def _build_section_i_minimum_deduction() -> LawSection:
     """§199A(i) - Minimum deduction (new provision)."""
     return LawSection(
         id="sec_i_minimum",
@@ -682,7 +684,7 @@ def _build_section_i_minimum_deduction(variables: Dict, parameters: Dict) -> Law
     )
 
 
-def _build_section_g_cooperatives(variables: Dict, parameters: Dict) -> LawSection:
+def _build_section_g_cooperatives() -> LawSection:
     """§199A(g) - Agricultural cooperatives."""
     return LawSection(
         id="sec_g_cooperatives",
@@ -701,7 +703,7 @@ def _build_section_g_cooperatives(variables: Dict, parameters: Dict) -> LawSecti
     )
 
 
-def _build_adjacent_sections() -> List[AdjacentSection]:
+def _build_adjacent_sections() -> list[AdjacentSection]:
     """Build the list of adjacent IRC sections that interact with §199A."""
 
     return [
