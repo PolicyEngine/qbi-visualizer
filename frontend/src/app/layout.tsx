@@ -1,14 +1,13 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
+import { BASE_PATH, SITE_URL } from '@/config/site';
 import { ShellHeader } from './Shell';
 import SubHeader from './SubHeader';
 import './globals.css';
 
-const SITE_URL = 'https://qbi-visualizer.vercel.app';
 // The app is mounted under a multizone basePath. The canonical, OG, and
 // sitemap URLs MUST include it — sub-pages live at e.g.
 // `/us/qbi-calculator/law`, never at the host root.
-const BASE_PATH = '/us/qbi-calculator';
 const CANONICAL_URL = `${SITE_URL}${BASE_PATH}/`;
 // Absolute OG image URL with basePath baked in. We serve the generated
 // PNG from a custom route (`/og`) rather than the `opengraph-image.tsx`
@@ -157,10 +156,13 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <div className="App flex flex-col h-screen bg-pe-bg-primary">
+        {/* Desktop keeps the app-like fixed viewport with internal panel
+         * scrolling; below lg the page scrolls normally so stacked panels
+         * are reachable on small screens. */}
+        <div className="App flex flex-col min-h-screen lg:h-screen bg-pe-bg-primary">
           <ShellHeader />
           <SubHeader />
-          <main className="flex-1 overflow-hidden">{children}</main>
+          <main className="flex-1 lg:overflow-hidden">{children}</main>
         </div>
       </body>
     </html>

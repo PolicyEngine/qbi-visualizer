@@ -1,109 +1,56 @@
 #!/bin/bash
 
-# QBI Visualizer - Quick Start Script
-# This script sets up and runs both backend and frontend
+# QBI Visualizer - local dev start script.
+# Sets up and runs the backend (FastAPI, port 8000) and the frontend
+# (Next.js via bun, port 3000 under /us/qbi-calculator).
 
 set -e
 
-echo "🚀 QBI Visualizer - Quick Start"
-echo "================================"
-echo ""
-
-# Check if this is first run
-if [ ! -f "backend/.env" ]; then
-    echo "📝 First run detected - setting up configuration..."
-    cp backend/.env.example backend/.env
-    echo "✓ Created backend/.env"
-fi
+ROOT="$(cd "$(dirname "$0")" && pwd)"
 
 # Backend setup
-echo ""
-echo "🐍 Setting up backend..."
-cd backend
-
-if [ ! -d "venv" ]; then
-    echo "Creating virtual environment..."
-    python3 -m venv venv
+if [ ! -f "$ROOT/backend/.env" ] && [ -f "$ROOT/backend/.env.example" ]; then
+    cp "$ROOT/backend/.env.example" "$ROOT/backend/.env"
+    echo "Created backend/.env from .env.example"
 fi
 
-echo "Activating virtual environment..."
-source venv/bin/activate
+if [ ! -d "$ROOT/backend/venv" ]; then
+    echo "Creating backend virtual environment..."
+    python3 -m venv "$ROOT/backend/venv"
+fi
 
-echo "Installing Python dependencies..."
-pip install -q --upgrade pip
-pip install -q -e .
-
-echo "✓ Backend setup complete"
-
-cd ..
+echo "Installing backend dependencies..."
+"$ROOT/backend/venv/bin/pip" install -q --upgrade pip
+"$ROOT/backend/venv/bin/pip" install -q -e "$ROOT/backend"
 
 # Frontend setup
-echo ""
-echo "⚛️  Setting up frontend..."
-cd frontend
-
-if [ ! -d "node_modules" ]; then
-    echo "Installing Node dependencies..."
-    npm install
-    echo "✓ Frontend setup complete"
-else
-    echo "✓ Dependencies already installed"
+if [ ! -d "$ROOT/frontend/node_modules" ]; then
+    echo "Installing frontend dependencies..."
+    (cd "$ROOT/frontend" && bun install)
 fi
 
-cd ..
-
-# Start services
 echo ""
-echo "🎬 Starting services..."
-echo ""
-echo "Backend will run on: http://localhost:8000"
-echo "Frontend will run on: http://localhost:5173"
+echo "Backend:  http://localhost:8000 (docs at /docs)"
+echo "Frontend: http://localhost:3000/us/qbi-calculator"
 echo ""
 echo "Press Ctrl+C to stop both services"
 echo ""
 
-# Create a temporary script to run backend
-cat > /tmp/qbi-backend.sh << 'EOF'
-#!/bin/bash
-cd backend
-source venv/bin/activate
-echo "🐍 Starting backend..."
-python -m app.main
-EOF
-
-chmod +x /tmp/qbi-backend.sh
-
-# Create a temporary script to run frontend
-cat > /tmp/qbi-frontend.sh << 'EOF'
-#!/bin/bash
-cd frontend
-echo "⚛️  Starting frontend..."
-npm run dev
-EOF
-
-chmod +x /tmp/qbi-frontend.sh
-
-# Run both in background and capture PIDs
-/tmp/qbi-backend.sh &
+(cd "$ROOT/backend" && exec venv/bin/uvicorn app.main:app --reload --port 8000) &
 BACKEND_PID=$!
 
-sleep 3
+sleep 2
 
-/tmp/qbi-frontend.sh &
+(cd "$ROOT/frontend" && exec bun run dev) &
 FRONTEND_PID=$!
 
-# Cleanup function
 cleanup() {
     echo ""
-    echo "🛑 Stopping services..."
-    kill $BACKEND_PID $FRONTEND_PID 2>/dev/null
-    rm -f /tmp/qbi-backend.sh /tmp/qbi-frontend.sh
-    echo "✓ Services stopped"
+    echo "Stopping services..."
+    kill "$BACKEND_PID" "$FRONTEND_PID" 2>/dev/null || true
     exit 0
 }
 
-# Trap Ctrl+C
 trap cleanup INT TERM
 
-# Wait for both processes
 wait

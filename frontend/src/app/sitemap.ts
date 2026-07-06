@@ -1,4 +1,5 @@
 import type { MetadataRoute } from 'next';
+import { BASE_PATH, SITE_URL } from '@/config/site';
 
 /**
  * Dynamic sitemap.
@@ -6,13 +7,7 @@ import type { MetadataRoute } from 'next';
  * URLs MUST include the multizone `basePath` (`/us/qbi-calculator`) — the
  * app is only reachable under that prefix. Without it, crawlers hit the
  * Vercel host root and `/law` / `/forms`, which all return 404.
- *
- * `next.config.ts#basePath` is not surfaced via a public API at build
- * time, so the prefix is duplicated here. Keep this constant in sync
- * with the one in `next.config.ts` and `src/utils/api.ts`.
  */
-const SITE_URL = 'https://qbi-visualizer.vercel.app';
-const BASE_PATH = '/us/qbi-calculator';
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const lastModified = new Date();

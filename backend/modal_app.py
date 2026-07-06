@@ -9,7 +9,7 @@ Deploy with:
 
 Modal prints a URL like
     https://<workspace>--qbi-visualizer-backend-web.modal.run
-that the Vercel rewrite in `/vercel.json` should point at.
+that the `/api` proxy rewrite in `frontend/next.config.ts` should point at.
 """
 
 from pathlib import Path
@@ -28,7 +28,14 @@ image = (
         "pydantic>=2.0.0",
         "pydantic-settings>=2.0.0",
         "python-dotenv>=1.0.0",
-        "policyengine-us>=1.653.3",
+        "slowapi>=0.1.9",
+        # Pinned exactly: policyengine-us releases change tax parameters and
+        # logic, so a floating floor would let deployed results drift between
+        # image rebuilds. policyengine-core is pinned alongside it because
+        # newer cores break 1.669.0 at variable-load time. Bump the pair
+        # deliberately (keep in sync with pyproject.toml).
+        "policyengine-us==1.669.0",
+        "policyengine-core==3.25.2",
     )
     .add_local_dir(ROOT / "app", remote_path="/root/app")
 )
@@ -38,8 +45,13 @@ app = modal.App("qbi-visualizer-backend", image=image)
 
 @app.function(
     timeout=120,
-    # Bump to min_containers=1 if cold starts become annoying. PolicyEngine
-    # imports take ~5-10s, which dominates first-request latency.
+    # Keep warm containers around for 5 minutes after the last request —
+    # PolicyEngine imports take ~5-10s, which dominates first-request latency.
+    # Bump to min_containers=1 if cold starts become annoying.
+    scaledown_window=300,
+    # Cost cap: each container pays the full policyengine-us import and each
+    # request burns real CPU-seconds, so bound how far a burst can scale out.
+    max_containers=5,
 )
 @modal.asgi_app()
 def web():

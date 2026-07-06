@@ -4,19 +4,24 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
+const NAV_ITEMS = [
+  { href: '/', label: 'QBID calculator' },
+  { href: '/law', label: 'Law structure' },
+  { href: '/forms', label: 'Tax forms' },
+] as const;
+
 /**
  * Tool brand bar shown directly under the PolicyEngine multi-zone shell.
  * Same layout the standalone qbi-visualizer had before the multizone
  * migration: PE wordmark, vertical rule, QBID title + §199A subtitle,
- * tool tab on the right.
+ * tool navigation on the right.
  */
 export default function SubHeader() {
   const pathname = usePathname() || '/';
-  const isActive = pathname === '/';
 
   return (
-    <div className="bg-white border-b border-pe-gray-200 px-6 py-4">
-      <div className="flex items-center justify-between max-w-7xl mx-auto">
+    <div className="bg-white border-b border-pe-gray-200 px-4 sm:px-6 py-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 max-w-7xl mx-auto">
         <div className="flex items-center gap-4">
           <Link href="/" className="flex items-center">
             {/* next/image auto-prefixes the multizone basePath for
@@ -38,24 +43,28 @@ export default function SubHeader() {
             <p className="text-xs text-pe-text-tertiary">26 U.S.C. &sect; 199A</p>
           </div>
         </div>
-        <div
-          role="tablist"
+        <nav
           aria-label="Application views"
           className="flex gap-1 bg-pe-gray-100 p-1 rounded-pe-lg"
         >
-          <Link
-            role="tab"
-            aria-selected={isActive}
-            href="/"
-            className={`px-4 py-2 rounded-pe-md text-sm font-medium transition-all ${
-              isActive
-                ? 'bg-white text-pe-text-primary shadow-sm'
-                : 'text-pe-text-secondary hover:text-pe-text-primary'
-            }`}
-          >
-            QBID calculator
-          </Link>
-        </div>
+          {NAV_ITEMS.map(({ href, label }) => {
+            const isActive = pathname === href;
+            return (
+              <Link
+                key={href}
+                href={href}
+                aria-current={isActive ? 'page' : undefined}
+                className={`px-4 py-2 rounded-pe-md text-sm font-medium transition-all ${
+                  isActive
+                    ? 'bg-white text-pe-text-primary shadow-sm'
+                    : 'text-pe-text-secondary hover:text-pe-text-primary'
+                }`}
+              >
+                {label}
+              </Link>
+            );
+          })}
+        </nav>
       </div>
     </div>
   );

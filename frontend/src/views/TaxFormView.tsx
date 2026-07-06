@@ -19,21 +19,30 @@ function TaxFormView() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchFormMapping();
-  }, []);
+    const controller = new AbortController();
 
-  const fetchFormMapping = async () => {
-    try {
-      const res = await fetch(apiUrl('/api/forms/mapping'));
-      if (!res.ok) throw new Error('Failed to fetch form mapping');
-      const result = await res.json();
-      setData(result);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setLoading(false);
-    }
-  };
+    const fetchFormMapping = async () => {
+      try {
+        const res = await fetch(apiUrl('/api/forms/mapping'), { signal: controller.signal });
+        if (!res.ok) throw new Error('Failed to fetch form mapping');
+        const result = await res.json();
+        // Light runtime validation of the response shape before rendering.
+        if (!result || !Array.isArray(result.forms) || typeof result.summary !== 'object' || result.summary === null) {
+          throw new Error('Form mapping response has an unexpected shape');
+        }
+        setData(result as FormMappingResponse);
+        setLoading(false);
+      } catch (err) {
+        // Ignore aborts (component unmounted / effect cleaned up).
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        setError(err instanceof Error ? err.message : 'Unknown error');
+        setLoading(false);
+      }
+    };
+
+    fetchFormMapping();
+    return () => controller.abort();
+  }, []);
 
   if (loading) {
     return (
@@ -43,10 +52,18 @@ function TaxFormView() {
     );
   }
 
-  if (error || !data) {
+  if (error) {
     return (
       <div className="flex items-center justify-center h-full bg-pe-gray-50">
         <div className="text-red-500">Error: {error}</div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="flex items-center justify-center h-full bg-pe-gray-50">
+        <div className="text-pe-text-tertiary">No tax form mapping data available.</div>
       </div>
     );
   }
@@ -81,9 +98,22 @@ function TaxFormView() {
       {/* Tab content */}
       <div className="flex-1 overflow-hidden">
         {activeTab === 'overview' && <OverviewTab data={data} />}
-        {activeTab === 'form8995' && form8995 && <FormDetailTab form={form8995} />}
-        {activeTab === 'form8995a' && form8995a && <FormDetailTab form={form8995a} />}
+        {activeTab === 'form8995' &&
+          (form8995 ? <FormDetailTab form={form8995} /> : <FormNotFound formNumber="8995" />)}
+        {activeTab === 'form8995a' &&
+          (form8995a ? <FormDetailTab form={form8995a} /> : <FormNotFound formNumber="8995-A" />)}
         {activeTab === 'gaps' && <GapsTab data={data} />}
+      </div>
+    </div>
+  );
+}
+
+// Shown when a form the UI expects is missing from the API response.
+function FormNotFound({ formNumber }: { formNumber: string }) {
+  return (
+    <div className="flex items-center justify-center h-full bg-pe-gray-50">
+      <div className="text-pe-text-tertiary text-sm">
+        Form {formNumber} was not found in the form mapping response.
       </div>
     </div>
   );
@@ -125,7 +155,7 @@ function OverviewTab({ data }: { data: FormMappingResponse }) {
         </div>
 
         {/* Summary Stats */}
-        <div className="grid grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
           <div className="bg-white rounded-pe-lg border border-pe-gray-200 p-4 text-center">
             <div className="text-3xl font-bold text-pe-text-primary">{data.summary.total_elements}</div>
             <div className="text-sm text-pe-text-tertiary">Total Elements</div>

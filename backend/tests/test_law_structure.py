@@ -9,7 +9,7 @@ from app.services.law_structure_builder import build_qbid_law_structure
 
 @pytest.fixture
 def structure():
-    return build_qbid_law_structure({}, {})
+    return build_qbid_law_structure()
 
 
 def test_no_tcja_sunset_after_obbba(structure):

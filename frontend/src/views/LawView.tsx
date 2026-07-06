@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import axios from 'axios';
 import {
   QBIDLawStructure,
   LawSection,
@@ -48,8 +47,9 @@ const SectionCard = ({
   };
 
   return (
-    <div
-      className={`bg-white border border-pe-gray-200 border-l-4 ${borderColors[section.status]} rounded-pe-lg p-4 cursor-pointer transition-all hover:shadow-md ${
+    <button
+      type="button"
+      className={`block w-full text-left bg-white border border-pe-gray-200 border-l-4 ${borderColors[section.status]} rounded-pe-lg p-4 cursor-pointer transition-all hover:shadow-md ${
         isActive ? 'ring-2 ring-pe-teal-500 shadow-md' : ''
       }`}
       onClick={onClick}
@@ -62,7 +62,7 @@ const SectionCard = ({
         <StatusBadge status={section.status} />
       </div>
       <p className="text-sm text-pe-text-secondary line-clamp-2">{section.description}</p>
-    </div>
+    </button>
   );
 };
 
@@ -111,10 +111,13 @@ const FlowchartView = ({
 
   const selectedSectionData = structure.sections.find((s) => s.id === selectedSection);
 
+  const totalSections = structure.total_sections;
+  const sectionPct = (count: number) => (totalSections > 0 ? (count / totalSections) * 100 : 0);
+
   return (
-    <div className="flex h-full">
+    <div className="flex flex-col lg:flex-row h-full overflow-y-auto lg:overflow-hidden">
       {/* Left: Flow diagram */}
-      <div className="flex-1 overflow-y-auto p-6 bg-pe-gray-50">
+      <div className="lg:flex-1 lg:overflow-y-auto p-6 bg-pe-gray-50">
         <div className="max-w-3xl mx-auto">
           {/* Summary */}
           <div className="mb-8 bg-white rounded-pe-lg border border-pe-gray-200 p-5">
@@ -149,15 +152,15 @@ const FlowchartView = ({
             <div className="mt-4 h-2 bg-pe-gray-100 rounded-full overflow-hidden flex">
               <div
                 className="bg-emerald-500 h-full"
-                style={{ width: `${(structure.implemented_sections / structure.total_sections) * 100}%` }}
+                style={{ width: `${sectionPct(structure.implemented_sections)}%` }}
               />
               <div
                 className="bg-amber-500 h-full"
-                style={{ width: `${(structure.partial_sections / structure.total_sections) * 100}%` }}
+                style={{ width: `${sectionPct(structure.partial_sections)}%` }}
               />
               <div
                 className="bg-red-500 h-full"
-                style={{ width: `${(structure.missing_sections / structure.total_sections) * 100}%` }}
+                style={{ width: `${sectionPct(structure.missing_sections)}%` }}
               />
             </div>
           </div>
@@ -197,7 +200,7 @@ const FlowchartView = ({
       </div>
 
       {/* Right: Details */}
-      <div className="w-[420px] border-l border-pe-gray-200 bg-white overflow-y-auto">
+      <div className="w-full lg:w-[420px] border-t lg:border-t-0 lg:border-l border-pe-gray-200 bg-white lg:overflow-y-auto">
         {selectedSectionData ? (
           <div className="p-6">
             <div className="mb-6">
@@ -337,9 +340,9 @@ const AdjacentSectionsView = ({ structure }: { structure: QBIDLawStructure }) =>
   const selectedAdj = adjacentSections.find((s) => s.id === selectedSection);
 
   return (
-    <div className="flex h-full">
+    <div className="flex flex-col lg:flex-row h-full overflow-y-auto lg:overflow-hidden">
       {/* Left: List of adjacent sections */}
-      <div className="flex-1 overflow-y-auto p-6 bg-pe-gray-50">
+      <div className="lg:flex-1 lg:overflow-y-auto p-6 bg-pe-gray-50">
         <div className="max-w-3xl mx-auto">
           {/* Header */}
           <div className="mb-6 bg-white rounded-pe-lg border border-pe-gray-200 p-5">
@@ -377,10 +380,11 @@ const AdjacentSectionsView = ({ structure }: { structure: QBIDLawStructure }) =>
               </h3>
               <div className="space-y-3">
                 {group.sections.map((section) => (
-                  <div
+                  <button
+                    type="button"
                     key={section.id}
                     onClick={() => setSelectedSection(section.id)}
-                    className={`bg-white border rounded-pe-lg p-4 cursor-pointer transition-all hover:shadow-md ${
+                    className={`block w-full text-left bg-white border rounded-pe-lg p-4 cursor-pointer transition-all hover:shadow-md ${
                       selectedSection === section.id
                         ? 'ring-2 ring-pe-teal-500 border-pe-teal-300'
                         : 'border-pe-gray-200'
@@ -401,7 +405,7 @@ const AdjacentSectionsView = ({ structure }: { structure: QBIDLawStructure }) =>
                         </span>
                       ))}
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -410,7 +414,7 @@ const AdjacentSectionsView = ({ structure }: { structure: QBIDLawStructure }) =>
       </div>
 
       {/* Right: Details panel */}
-      <div className="w-[450px] border-l border-pe-gray-200 bg-white overflow-y-auto">
+      <div className="w-full lg:w-[450px] border-t lg:border-t-0 lg:border-l border-pe-gray-200 bg-white lg:overflow-y-auto">
         {selectedAdj ? (
           <div className="p-6">
             <div className="mb-6">
@@ -643,21 +647,28 @@ export default function LawView() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchStructure();
-  }, []);
+    const controller = new AbortController();
 
-  const fetchStructure = async () => {
-    try {
-      setLoading(true);
-      const response = await axios.get(apiUrl('/api/law/structure'));
-      setStructure(response.data);
-    } catch (err) {
-      setError('Failed to load law structure');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const fetchStructure = async () => {
+      try {
+        setLoading(true);
+        const res = await fetch(apiUrl('/api/law/structure'), { signal: controller.signal });
+        if (!res.ok) throw new Error('Failed to load law structure');
+        const data = await res.json();
+        setStructure(data);
+        setLoading(false);
+      } catch (err) {
+        // Ignore aborts (component unmounted / effect cleaned up).
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        setError('Failed to load law structure');
+        console.error(err);
+        setLoading(false);
+      }
+    };
+
+    fetchStructure();
+    return () => controller.abort();
+  }, []);
 
   if (loading) {
     return (

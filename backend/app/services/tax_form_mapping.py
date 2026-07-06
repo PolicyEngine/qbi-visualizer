@@ -1,5 +1,6 @@
 """Service for building tax form to PolicyEngine mappings."""
 
+from functools import lru_cache
 from typing import List, Dict
 from app.models.tax_form_mapping import (
     ImplementationStatus,
@@ -420,8 +421,13 @@ def build_form_8995a_mapping() -> TaxFormMapping:
     )
 
 
+@lru_cache(maxsize=1)
 def build_form_mapping_response() -> FormMappingResponse:
-    """Build the complete form mapping response."""
+    """Build the complete form mapping response.
+
+    The mapping is static per process, so cache it instead of rebuilding
+    it on every request.
+    """
 
     form_8995 = build_form_8995_mapping()
     form_8995a = build_form_8995a_mapping()

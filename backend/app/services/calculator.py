@@ -1,6 +1,12 @@
 """QBI calculator using PolicyEngine US."""
 
+import logging
+
 from policyengine_us import Simulation
+
+from app.services import pe_parameters as pe
+
+logger = logging.getLogger(__name__)
 
 
 # All person-level input variables relevant to QBI
@@ -274,7 +280,7 @@ def calculate(inputs: dict) -> dict:
     Returns:
         Dictionary with input metadata, output values, and parameters.
     """
-    year = str(inputs.get("year", 2024))
+    year = str(inputs.get("year", pe.DEFAULT_YEAR))
     filing_status = inputs.get("filing_status", "SINGLE")
     state_code = inputs.get("state_code", "TX")  # Default to no-income-tax state
 
@@ -288,8 +294,11 @@ def calculate(inputs: dict) -> dict:
             val = var_def["default"]
         person_vars[var_name] = {year: val}
 
-    # Build situation
-    is_joint = filing_status in ("JOINT", "SURVIVING_SPOUSE")
+    # Build situation. Only JOINT gets a living spouse — a SURVIVING_SPOUSE
+    # files alone (their spouse died in a prior year) but still uses
+    # joint-level thresholds, which PolicyEngine applies from the explicit
+    # filing_status input below.
+    is_joint = filing_status == "JOINT"
     members = ["you", "spouse"] if is_joint else ["you"]
 
     situation = {
@@ -299,6 +308,7 @@ def calculate(inputs: dict) -> dict:
         "tax_units": {
             "tax_unit": {
                 "members": members,
+                "filing_status": {year: filing_status},
             }
         },
         "families": {
@@ -333,19 +343,20 @@ def calculate(inputs: dict) -> dict:
 
     sim = Simulation(situation=situation)
 
-    # Compute all outputs
+    # Compute all outputs. Failed variables are omitted from `outputs` and
+    # reported in `errors` instead, so `outputs` values are always numbers.
     results = {}
+    errors = {}
     for output_def in QBI_OUTPUTS:
         var_name = output_def["name"]
         try:
             value = sim.calculate(var_name, year)
-            if output_def["entity"] == "tax_unit":
-                results[var_name] = round(float(value[0]), 2)
-            else:
-                # Person-level: sum across all people (primarily just "you")
-                results[var_name] = round(float(value[0]), 2)
+            # First entity row: the sole tax unit, or the filer ("you") for
+            # person-level variables — any spouse row carries no QBI inputs.
+            results[var_name] = round(float(value[0]), 2)
         except Exception as e:
-            results[var_name] = {"error": str(e)}
+            logger.exception("Failed to calculate variable %r", var_name)
+            errors[var_name] = (str(e) or type(e).__name__)[:200]
 
     # Get parameter values used
     params = sim.tax_benefit_system.parameters
@@ -384,11 +395,23 @@ def calculate(inputs: dict) -> dict:
             ),
         }
     except Exception:
+        logger.exception("Failed to read QBI parameter values for %s", year)
         param_values = {}
+
+    # Echo the filing status the simulation actually applied (should always
+    # match the request now that filing_status is an explicit input).
+    try:
+        applied_filing_status = str(
+            sim.calculate("filing_status", year).decode_to_str()[0]
+        )
+    except Exception:
+        logger.exception("Failed to read simulated filing_status")
+        applied_filing_status = filing_status
 
     return {
         "outputs": results,
+        "errors": errors,
         "parameters": param_values,
         "year": int(year),
-        "filing_status": filing_status,
+        "filing_status": applied_filing_status,
     }

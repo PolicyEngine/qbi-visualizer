@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { BASE_PATH, SITE_URL } from '@/config/site';
 import TaxFormView from '@/views/TaxFormView';
 
 // Canonical must include the multizone basePath; without it, sub-pages
@@ -7,7 +8,7 @@ import TaxFormView from '@/views/TaxFormView';
 export const metadata: Metadata = {
   title: 'Tax forms | QBI Deduction Calculator (IRC §199A) | PolicyEngine',
   alternates: {
-    canonical: 'https://qbi-visualizer.vercel.app/us/qbi-calculator/forms',
+    canonical: `${SITE_URL}${BASE_PATH}/forms`,
   },
 };
 

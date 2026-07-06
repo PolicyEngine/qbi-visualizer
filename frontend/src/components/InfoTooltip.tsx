@@ -45,7 +45,10 @@ export function InfoTooltip({ definition }: { definition: InputDefinition }) {
     setPos({ top: rect.bottom + 6, left });
   }, [open]);
 
-  // Click-outside closes the popover.
+  // While open: click-outside closes, Escape closes, and any scroll closes
+  // (the popover is fixed-positioned, so it would otherwise drift away from
+  // the icon when an ancestor scrolls). The scroll listener uses capture so
+  // scrolls inside nested overflow containers are caught too.
   useEffect(() => {
     if (!open) return;
     const onDocClick = (e: MouseEvent) => {
@@ -54,8 +57,18 @@ export function InfoTooltip({ definition }: { definition: InputDefinition }) {
       if (popoverRef.current?.contains(target)) return;
       setOpen(false);
     };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    const onScroll = () => setOpen(false);
     document.addEventListener('mousedown', onDocClick);
-    return () => document.removeEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKeyDown);
+    window.addEventListener('scroll', onScroll, { capture: true });
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('scroll', onScroll, { capture: true });
+    };
   }, [open]);
 
   useEffect(() => () => cancelClose(), []);
@@ -79,8 +92,14 @@ export function InfoTooltip({ definition }: { definition: InputDefinition }) {
             e.preventDefault();
             setOpen((v) => !v);
           }}
+          onFocus={() => {
+            cancelClose();
+            setOpen(true);
+          }}
+          onBlur={scheduleClose}
           aria-label="More info"
-          className="text-pe-text-tertiary hover:text-pe-teal-600 transition-colors"
+          aria-expanded={open}
+          className="text-pe-text-tertiary hover:text-pe-teal-600 focus-visible:text-pe-teal-600 transition-colors"
         >
           <svg className="w-4 h-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
             <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 12.5a5.5 5.5 0 110-11 5.5 5.5 0 010 11zM7.25 6.75a.75.75 0 011.5 0v4a.75.75 0 01-1.5 0v-4zM8 4.25a.9.9 0 110 1.8.9.9 0 010-1.8z" />

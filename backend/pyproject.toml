@@ -16,7 +16,13 @@ dependencies = [
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
     "python-dotenv>=1.0.0",
-    "policyengine-us>=1.653.3",
+    "slowapi>=0.1.9",
+    # Pinned exactly so deployed tax results can't drift between installs;
+    # bump deliberately (keep in sync with modal_app.py).
+    "policyengine-us==1.669.0",
+    # policyengine-us does not upper-bound core; newer cores break 1.669.0
+    # ("mixes computation modes" on variable load). Pin the known-good pair.
+    "policyengine-core==3.25.2",
 ]
 
 [project.optional-dependencies]

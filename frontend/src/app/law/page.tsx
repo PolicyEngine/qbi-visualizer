@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { BASE_PATH, SITE_URL } from '@/config/site';
 import LawView from '@/views/LawView';
 
 // Canonical must include the multizone basePath; without it, sub-pages
@@ -7,7 +8,7 @@ import LawView from '@/views/LawView';
 export const metadata: Metadata = {
   title: 'Law structure | QBI Deduction Calculator (IRC §199A) | PolicyEngine',
   alternates: {
-    canonical: 'https://qbi-visualizer.vercel.app/us/qbi-calculator/law',
+    canonical: `${SITE_URL}${BASE_PATH}/law`,
   },
 };
 
