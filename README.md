@@ -1,181 +1,82 @@
-# QBI Computation Visualizer
+# QBI Visualizer
 
-A comprehensive visualization tool for the Qualified Business Income Deduction (Section 199A) calculation in PolicyEngine US.
+An interactive calculator and visualizer for the Qualified Business Income Deduction (26 USC § 199A), built on [PolicyEngine US](https://github.com/PolicyEngine/policyengine-us).
 
-## Features
+The app has three tabs:
 
-- **Complete Input-to-Output Flow Visualization**: Shows all input variables flowing through to the final QBI deduction
-- **Dynamic GitHub Integration**: Automatically pulls latest PolicyEngine US code from master branch
-- **Parameter Visibility**: Displays all parameters used in formulas with direct links to YAML files
-- **Interactive Dependency Graph**: Click any variable to see its formula, dependencies, and references
-- **Legal References**: Direct links to USC statutes, IRS forms, and publications
-- **TAXSIM Comparison**: Compare PolicyEngine calculations against TAXSIM (optional)
+1. **QBID Calculator** — enter income sources, business properties, and filing status, and run a real PolicyEngine US simulation to compute the deduction.
+2. **Law Structure** — a flowchart of § 199A showing how the statute maps to the calculation and to PolicyEngine code.
+3. **Tax Forms** — how the calculation maps to IRS forms 8995 and 8995-A.
 
 ## Architecture
 
-### Backend (FastAPI + Python)
-- **GitHub Manager**: Clones and syncs policyengine-us from GitHub
-- **Code Extractor**: Dynamically parses Python variables using AST
-- **Parameter Extractor**: Extracts parameter values from YAML files
-- **Calculator**: Runs actual PolicyEngine calculations with intermediate steps
-- **API**: REST endpoints for variables, parameters, calculations, and comparisons
+- **Frontend** (`frontend/`): Next.js (App Router) + TypeScript + Tailwind CSS 4, managed with [bun](https://bun.sh). Served under the base path `/us/qbi-calculator`. Deployed on Vercel.
+- **Backend** (`backend/`): FastAPI + policyengine-us. Runs simulations server-side. Deployed on [Modal](https://modal.com).
 
-### Frontend (React + TypeScript)
-- **Flow Visualization**: Interactive computation graph showing inputs → outputs
-- **Variable Details Panel**: Shows formulas, dependencies, parameters, and references
-- **Input Controller**: Set scenario inputs and run calculations
-- **Comparison View**: Side-by-side PolicyEngine vs TAXSIM results
+The frontend calls `/api/*`, which `frontend/next.config.ts` rewrites to the backend: `http://localhost:8000` in development and the Modal deployment in production.
 
-## Quick Start
+## Quick start
 
-### Prerequisites
-- Python 3.10+
-- Node.js 18+
-- Git
+Prerequisites: Python 3.10–3.12, [bun](https://bun.sh).
 
-### Backend Setup
+Run `./start.sh` to set up and start both services, or start them manually:
+
+**Terminal 1 — backend:**
 
 ```bash
 cd backend
-pip install -e .
+python3 -m venv venv          # first time only
+venv/bin/pip install -e .     # first time only
+venv/bin/uvicorn app.main:app --reload --port 8000
 ```
 
-### Frontend Setup
+**Terminal 2 — frontend:**
 
 ```bash
 cd frontend
-npm install
+bun install                   # first time only
+bun run dev
 ```
 
-### Running the Application
+Open http://localhost:3000/us/qbi-calculator.
 
-**Terminal 1 - Backend:**
-```bash
-cd backend
-uvicorn app.main:app --reload --port 8000
-```
+## API endpoints
 
-**Terminal 2 - Frontend:**
-```bash
-cd frontend
-npm run dev
-```
+The backend serves interactive docs at http://localhost:8000/docs.
 
-Open http://localhost:5173
+- `GET /` — app status
+- `GET /health` — health check
+- `GET /api/qbi/inputs` — input variables for the calculator
+- `GET /api/qbi/outputs` — output variables the calculator returns
+- `POST /api/qbi/calculate` — run a PolicyEngine US simulation for a household
+- `GET /api/law/structure` — § 199A law structure data
+- `GET /api/forms/mapping` — IRS form mapping data
 
-## Configuration
-
-Create `backend/.env`:
-
-```bash
-# GitHub Configuration
-GITHUB_REPO=https://github.com/PolicyEngine/policyengine-us.git
-GITHUB_BRANCH=master
-AUTO_SYNC_MINUTES=30
-
-# Local Paths
-REPOS_DIR=./data/repos
-CACHE_DIR=./data/cache
-
-# TAXSIM Integration (Optional)
-TAXSIM_PATH=/path/to/taxsim
-TAXSIM_EXECUTABLE=taxsim35
-```
-
-## Usage
-
-1. **View Complete Flow**: See all QBI inputs → final deduction with parameters
-2. **Click Variables**: View source code, formulas, and GitHub links
-3. **Click Parameters**: See YAML files, values, and legal references
-4. **Run Calculations**: Enter scenario inputs and see step-by-step results
-5. **Compare with TAXSIM**: Run same scenario through both systems
-
-## QBI Deduction Components
-
-### Input Variables (17)
-- 6 income sources (self-employment, partnership, rental, farm ops, farm rent, estate)
-- 6 qualification flags (would_be_qualified for each income source)
-- 3 QBI deductions (SE tax, health insurance, pension)
-- 2 business properties (W-2 wages, property basis)
-- 2 business type flags (is_sstb, is_qualified)
-- 3 tax unit inputs (taxable income, filing status, capital gains)
-
-### Parameters (10)
-- Income and deduction definition lists
-- 4 rates (base 20%, wage 50%, alt wage 25%, property 2.5%)
-- 2 phase-out parameters (start threshold, length)
-- 2 deduction floor parameters (in_effect, amount)
-
-### Output
-- Final qualified_business_income_deduction at tax-unit level
-
-## Project Structure
+## Project structure
 
 ```
 qbi-visualizer/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py                 # FastAPI app
-│   │   ├── config.py               # Configuration
-│   │   ├── api/                    # API endpoints
-│   │   │   ├── variables.py
-│   │   │   ├── parameters.py
-│   │   │   ├── calculate.py
-│   │   │   └── compare.py
-│   │   ├── services/               # Core services
-│   │   │   ├── github_manager.py
-│   │   │   ├── code_extractor.py
-│   │   │   ├── parameter_extractor.py
-│   │   │   ├── calculator.py
-│   │   │   └── cache_manager.py
-│   │   ├── models/                 # Pydantic models
-│   │   └── utils/                  # Utilities
-│   ├── scripts/                    # One-time scripts
-│   ├── data/                       # Git repos, cache
-│   └── tests/
+│   │   ├── main.py          # FastAPI app, registers routers
+│   │   ├── api/             # calculator, law_structure, tax_form_mapping routers
+│   │   └── services/        # calculator.py runs PolicyEngine US simulations
+│   └── modal_app.py         # Modal deployment wrapper
 ├── frontend/
-│   ├── src/
-│   │   ├── pages/                  # Main views
-│   │   │   ├── FlowView.tsx
-│   │   │   ├── TableView.tsx
-│   │   │   └── ComparisonView.tsx
-│   │   ├── components/             # UI components
-│   │   │   ├── FlowGraph.tsx
-│   │   │   ├── VariableDetail.tsx
-│   │   │   ├── InputPanel.tsx
-│   │   │   └── ParameterDisplay.tsx
-│   │   ├── hooks/                  # React hooks
-│   │   └── types/                  # TypeScript types
-│   └── public/
-└── docs/
+│   ├── src/                 # Next.js App Router UI
+│   └── next.config.ts       # basePath and /api proxy target
+├── vercel.json              # Vercel build config (bun, frontend/)
+└── DEPLOYMENT.md            # deployment guide
 ```
 
-## Development
+## Deployment
 
-### Adding New Variables
-The system automatically detects new QBI-related variables when syncing from GitHub.
-
-### Updating Parameters
-Parameter values are extracted dynamically from YAML files in the policyengine-us repo.
-
-### Customizing Visualization
-Edit `frontend/src/components/FlowGraph.tsx` to change the flow diagram layout.
-
-## Legal References
-
-- **26 USC § 199A**: Qualified Business Income Deduction
-- **IRS Publication 535**: Business Expenses (Worksheet 12-A)
-- **Form 8995**: Qualified Business Income Deduction Simplified Computation
-- **Form 8995-A**: Qualified Business Income Deduction (detailed)
+See [DEPLOYMENT.md](DEPLOYMENT.md) for deploying the backend to Modal and the frontend to Vercel.
 
 ## Contributing
 
-This is a visualization and analysis tool. To contribute to the underlying PolicyEngine US calculations, see [PolicyEngine/policyengine-us](https://github.com/PolicyEngine/policyengine-us).
+To contribute to the underlying QBI calculation, see [PolicyEngine/policyengine-us](https://github.com/PolicyEngine/policyengine-us).
 
 ## License
 
-MIT License - See LICENSE file for details
-
-## Credits
-
-Built to visualize and understand the QBI deduction implementation in PolicyEngine US.
+Not yet specified.

@@ -33,14 +33,18 @@ Frontend on Vercel, backend on Modal.
 
 ## Frontend (Vercel)
 
-1. Update `vercel.json` at the repo root: replace
-   `REPLACE-WITH-MODAL-URL.modal.run` with the Modal URL from above.
+1. Point the API proxy at your Modal URL. The proxy target lives in
+   `frontend/next.config.ts` (the `rewrites()` function), which forwards
+   `/api/*` to the backend. Either edit the production URL there, or set
+   the `API_TARGET` environment variable in the Vercel project settings
+   to override it without a code change.
 
 2. Commit and push.
 
 3. Connect the repo to Vercel (one-time): from the Vercel dashboard,
-   "Add New… → Project", import this repo. Leave the Vercel build
-   settings on defaults — `vercel.json` overrides them.
+   "Add New… → Project", import this repo. Leave the Root Directory at
+   the repo root — the root `vercel.json` builds the app from
+   `frontend/` with bun (`bun install --frozen-lockfile`, `bun run build`).
 
    Or via CLI:
 
@@ -49,6 +53,9 @@ Frontend on Vercel, backend on Modal.
    vercel link
    vercel --prod
    ```
+
+   The app is served under the base path `/us/qbi-calculator`;
+   `next.config.ts` redirects the bare domain root there.
 
 ## Updating
 
