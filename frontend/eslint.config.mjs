@@ -19,12 +19,6 @@ export default defineConfig([
       'react-hooks/immutability': 'warn',
     },
   },
-  {
-    files: ['src/app/layout.tsx'],
-    rules: {
-      '@next/next/no-page-custom-font': 'off',
-    },
-  },
   globalIgnores([
     '.next/**',
     'out/**',

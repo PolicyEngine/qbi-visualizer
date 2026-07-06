@@ -82,16 +82,31 @@ const Chevron = ({ open }: { open: boolean }) => (
   </svg>
 );
 
+// Currency inputs hold raw strings while the user types (so transient
+// states like "", "-", or "12." survive the controlled re-render); they
+// are converted to numbers at the API boundary and for display math.
+const toNumber = (val: unknown): number => {
+  if (typeof val === 'number') return Number.isFinite(val) ? val : 0;
+  if (typeof val === 'string') {
+    const n = parseFloat(val);
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+};
+
 function countNonDefault(inputs: Record<string, any>, defs: InputDef[]): number {
   return defs.filter((d) => {
     const val = inputs[d.name];
-    if (d.type === 'currency') return val !== 0 && val !== undefined;
-    return val !== d.default && val !== undefined;
+    if (val === undefined) return false;
+    if (d.type === 'currency') return toNumber(val) !== d.default;
+    return val !== d.default;
   }).length;
 }
 
 interface CalcResult {
-  outputs: Record<string, number | { error: string }>;
+  outputs: Record<string, number>;
+  // Per-variable failures reported by the backend, variable name → message.
+  errors?: Record<string, string>;
   parameters: Record<string, number>;
   year: number;
   filing_status: string;
@@ -101,7 +116,7 @@ type Outputs = CalcResult['outputs'];
 
 const num = (outputs: Outputs, name: string): number => {
   const v = outputs[name];
-  return typeof v === 'number' ? v : 0;
+  return typeof v === 'number' && Number.isFinite(v) ? v : 0;
 };
 
 interface StageRow {
@@ -252,12 +267,10 @@ function BoxLineDiagram({
   outputs,
   inputs,
   parameters,
-  stale,
 }: {
   outputs: Outputs;
   inputs: Record<string, any>;
   parameters?: Record<string, number>;
-  stale?: boolean;
 }) {
   const nonSstb = num(outputs, 'qualified_business_income');
   const sstb = num(outputs, 'sstb_qualified_business_income');
@@ -265,7 +278,7 @@ function BoxLineDiagram({
   // REIT/PTP is a pure input passthrough — read it from inputs directly
   // so the box reflects what the user typed without waiting for a
   // calculation round-trip.
-  const reitPtp = Number(inputs['qualified_reit_and_ptp_income'] ?? 0);
+  const reitPtp = toNumber(inputs['qualified_reit_and_ptp_income']);
   const qbidAmount = num(outputs, 'qbid_amount');
   const tiBefore = num(outputs, 'taxable_income_less_qbid');
   const netCapGain = num(outputs, 'adjusted_net_capital_gain');
@@ -280,7 +293,7 @@ function BoxLineDiagram({
   const reductionFromCaps = Math.max(0, qbiComponentMax - businessComponents);
   // Treat sub-dollar deltas as floating-point noise rather than a real cap.
   const meaningfulReduction = reductionFromCaps >= 1;
-  // Don't mark anything as binding when both candidates are zero (stale state).
+  // Don't mark anything as binding when both candidates are zero.
   const hasOutputs = qbidAmount > 0 || incomeLimit > 0;
   const qbiDeductionBinds = hasOutputs && qbidAmount <= incomeLimit;
   const incomeLimitBinds = hasOutputs && !qbiDeductionBinds;
@@ -292,7 +305,7 @@ function BoxLineDiagram({
   const isQualified = (name: string) =>
     inputs[`${name}_would_be_qualified`] === undefined ||
     inputs[`${name}_would_be_qualified`] === true;
-  const inputVal = (name: string): number => Number(inputs[name] ?? 0);
+  const inputVal = (name: string): number => toNumber(inputs[name]);
 
   const feedersFor = (target: 'non_sstb' | 'sstb' | 'cap_gain' | 'ti'): Feeder[] => {
     if (target === 'non_sstb') {
@@ -358,13 +371,9 @@ function BoxLineDiagram({
   ] as Omit<WageInput, 'value'>[])
     .map((f) => ({ ...f, value: inputVal(f.name) }))
     .filter((f) => f.alwaysShow || f.value > 0);
-  // Wage cap is a COMPUTED value, not a raw input — so when the result
-  // is stale (user edited inputs after a calc), zero it out alongside
-  // the other computed boxes. The W-2 / UBIA feeder boxes still show
-  // current input values because they're inputs.
-  const w2 = stale ? 0 : inputVal('w2_wages_from_qualified_business');
-  const ubiaVal = stale ? 0 : inputVal('unadjusted_basis_qualified_property');
-  const wageCap = stale ? 0 : Math.max(0.50 * w2, 0.25 * w2 + 0.025 * ubiaVal);
+  const w2 = inputVal('w2_wages_from_qualified_business');
+  const ubiaVal = inputVal('unadjusted_basis_qualified_property');
+  const wageCap = Math.max(0.50 * w2, 0.25 * w2 + 0.025 * ubiaVal);
   const showWageCap = true; // always show the wage / UBIA cap path
 
   // §199A(b)(3)(B) phase-in: between threshold and threshold + length the
@@ -1183,8 +1192,9 @@ export default function CalculatorView() {
     // Realistic seed: a single filer with $100k of non-SSTB self-employment
     // income, below the 2025 threshold ($197,300), so no wage/UBIA cap and
     // no SSTB phase-out — yields ~$18.6k QBID, capped only by taxable income.
+    // W-2 wages deliberately stay at 0: seeding them would silently distort
+    // above-threshold results from a collapsed section the user never saw.
     defaults.self_employment_income = 100_000;
-    defaults.w2_wages_from_qualified_business = 1_000_000;
     return defaults;
   };
 
@@ -1238,10 +1248,16 @@ export default function CalculatorView() {
     setLoading(true);
     setError(null);
     try {
+      // Currency fields hold raw strings while the user types — convert
+      // to numbers at the API boundary.
+      const payload: Record<string, any> = { ...inputs };
+      for (const def of INPUT_DEFS) {
+        if (def.type === 'currency') payload[def.name] = toNumber(inputs[def.name]);
+      }
       const res = await fetch(apiUrl('/api/qbi/calculate'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(inputs),
+        body: JSON.stringify(payload),
         signal: controller.signal,
       });
       if (!res.ok) {
@@ -1251,6 +1267,11 @@ export default function CalculatorView() {
       const data = await res.json();
       // Only apply if this is still the current request.
       if (calcAbortRef.current !== controller) return;
+      // Guard the shape before trusting it — a malformed response would
+      // otherwise surface as NaN currency strings deep in the diagram.
+      if (!data || typeof data !== 'object' || typeof data.outputs !== 'object' || data.outputs === null) {
+        throw new Error('Calculation response has an unexpected shape');
+      }
       setResult(data);
       setHasCalculated(true);
     } catch (err) {
@@ -1272,10 +1293,12 @@ export default function CalculatorView() {
   const qbiDefs = INPUT_DEFS.filter((d) => d.group === 'QBI Income Sources');
 
   return (
-    <div className="h-full flex bg-pe-bg-secondary">
+    // Desktop: fixed two-pane layout with independent panel scrolling.
+    // Below lg the panes stack and the page scrolls normally.
+    <div className="lg:h-full flex flex-col lg:flex-row bg-pe-bg-secondary">
       {/* Left: Inputs */}
       <aside
-        className="w-[460px] border-r border-pe-gray-200 bg-white overflow-y-auto flex flex-col"
+        className="w-full lg:w-[460px] border-b lg:border-b-0 lg:border-r border-pe-gray-200 bg-white lg:overflow-y-auto flex flex-col"
         aria-label="QBI deduction inputs"
       >
         <form
@@ -1328,6 +1351,8 @@ export default function CalculatorView() {
           {/* QBI Income Sources — compact table */}
           <div className="border border-pe-gray-200 rounded-pe-lg mb-2 overflow-hidden">
             <button
+              type="button"
+              aria-expanded={openSections.has('QBI Income Sources')}
               onClick={() => toggleSection('QBI Income Sources')}
               className="w-full flex items-center justify-between px-3 py-2 bg-pe-gray-50 hover:bg-pe-gray-100 transition-colors"
             >
@@ -1368,8 +1393,11 @@ export default function CalculatorView() {
                       <input
                         id={`field-${income.name}`}
                         type="number"
-                        value={inputs[income.name] ?? 0}
-                        onChange={(e) => handleChange(income.name, parseFloat(e.target.value) || 0)}
+                        // Store the raw string so transient states ("",
+                        // "-", "12.") survive the controlled re-render —
+                        // negative amounts (business losses) are typeable.
+                        value={inputs[income.name] ?? ''}
+                        onChange={(e) => handleChange(income.name, e.target.value)}
                         className="w-full pl-5 pr-1.5 py-1 border border-pe-gray-200 rounded text-sm text-right tabular-nums focus:outline-none focus:ring-1 focus:ring-pe-teal-500"
                       />
                     </div>
@@ -1401,6 +1429,8 @@ export default function CalculatorView() {
             return (
               <div key={group.name} className="border border-pe-gray-200 rounded-pe-lg mb-2 overflow-hidden">
                 <button
+                  type="button"
+                  aria-expanded={isOpen}
                   onClick={() => toggleSection(group.name)}
                   className="w-full flex items-center justify-between px-3 py-2 bg-pe-gray-50 hover:bg-pe-gray-100 transition-colors"
                 >
@@ -1432,8 +1462,8 @@ export default function CalculatorView() {
                           <input
                             id={`field-${def.name}`}
                             type="number"
-                            value={inputs[def.name] ?? 0}
-                            onChange={(e) => handleChange(def.name, parseFloat(e.target.value) || 0)}
+                            value={inputs[def.name] ?? ''}
+                            onChange={(e) => handleChange(def.name, e.target.value)}
                             className="w-full pl-5 pr-1.5 py-1 border border-pe-gray-200 rounded text-sm text-right tabular-nums focus:outline-none focus:ring-1 focus:ring-pe-teal-500"
                           />
                         </div>
@@ -1494,7 +1524,7 @@ export default function CalculatorView() {
       </aside>
 
       {/* Right: Results */}
-      <section aria-label="Calculation results" className="flex-1 overflow-y-auto p-8">
+      <section aria-label="Calculation results" className="flex-1 lg:overflow-y-auto p-4 sm:p-8">
         {/* Page intro — visible above the diagram, indexable on first paint. */}
         <div className="max-w-6xl mx-auto mb-6">
           <h2 className="text-xl font-semibold text-pe-text-primary mb-2">
@@ -1513,6 +1543,25 @@ export default function CalculatorView() {
         {error && (
           <div className="max-w-6xl mx-auto mb-6 p-4 bg-red-50 border border-pe-error/20 rounded-pe-lg text-pe-error text-sm">
             {error}
+          </div>
+        )}
+
+        {/* Per-variable failures reported by the backend. Without this,
+            a failed output would silently read as $0 — which for a tax
+            tool looks like a real answer. */}
+        {result?.errors && Object.keys(result.errors).length > 0 && (
+          <div className="max-w-6xl mx-auto mb-6 p-4 bg-amber-50 border border-amber-200 rounded-pe-lg text-sm text-amber-900">
+            <p className="font-semibold mb-1">
+              Some values could not be computed and are shown as $0:
+            </p>
+            <ul className="list-disc pl-5 space-y-0.5">
+              {Object.entries(result.errors).map(([name, msg]) => (
+                <li key={name}>
+                  <span className="font-mono text-xs">{name}</span>
+                  {msg ? ` — ${msg}` : null}
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 
@@ -1544,6 +1593,8 @@ export default function CalculatorView() {
                     ].map((tab) => (
                       <button
                         key={tab.id}
+                        type="button"
+                        aria-pressed={resultTab === tab.id}
                         onClick={() => setResultTab(tab.id)}
                         className={`px-3 py-1.5 rounded-pe-md text-xs font-medium transition-all ${
                           resultTab === tab.id
@@ -1559,7 +1610,7 @@ export default function CalculatorView() {
                   {resultTab === 'breakdown' ? (
                     <BreakdownStaged outputs={displayOutputs} />
                   ) : (
-                    <BoxLineDiagram outputs={displayOutputs} inputs={inputs} parameters={result?.parameters} stale={isStale} />
+                    <BoxLineDiagram outputs={displayOutputs} inputs={inputs} parameters={result?.parameters} />
                   )}
                 </>
               )}
@@ -1568,6 +1619,8 @@ export default function CalculatorView() {
                 {result && result.parameters && Object.keys(result.parameters).length > 0 && (
                   <div className="mb-6 bg-white rounded-pe-lg border border-pe-gray-200 overflow-hidden">
                     <button
+                      type="button"
+                      aria-expanded={parametersOpen}
                       onClick={() => setParametersOpen((v) => !v)}
                       className="w-full flex items-center justify-between px-5 py-3 bg-pe-gray-50 hover:bg-pe-gray-100 transition-colors text-left"
                     >
@@ -1605,7 +1658,7 @@ export default function CalculatorView() {
           })()}
 
         {/* FAQ — keyword-rich content for indexability. Mirrors the
-            FAQPage JSON-LD in index.html so the on-page text and the
+            FAQPage JSON-LD in app/layout.tsx so the on-page text and the
             structured data agree. */}
         <div className="max-w-6xl mx-auto mt-12 pt-8 border-t border-pe-gray-200">
           <h2 className="text-xl font-semibold text-pe-text-primary mb-4">
