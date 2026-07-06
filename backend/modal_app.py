@@ -31,8 +31,11 @@ image = (
         "slowapi>=0.1.9",
         # Pinned exactly: policyengine-us releases change tax parameters and
         # logic, so a floating floor would let deployed results drift between
-        # image rebuilds. Bump deliberately (keep in sync with pyproject.toml).
+        # image rebuilds. policyengine-core is pinned alongside it because
+        # newer cores break 1.669.0 at variable-load time. Bump the pair
+        # deliberately (keep in sync with pyproject.toml).
         "policyengine-us==1.669.0",
+        "policyengine-core==3.25.2",
     )
     .add_local_dir(ROOT / "app", remote_path="/root/app")
 )

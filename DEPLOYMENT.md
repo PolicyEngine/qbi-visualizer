@@ -42,9 +42,9 @@ Frontend on Vercel, backend on Modal.
 2. Commit and push.
 
 3. Connect the repo to Vercel (one-time): from the Vercel dashboard,
-   "Add New… → Project", import this repo. Leave the Root Directory at
-   the repo root — the root `vercel.json` builds the app from
-   `frontend/` with bun (`bun install --frozen-lockfile`, `bun run build`).
+   "Add New… → Project", import this repo and set the Root Directory to
+   `frontend` — `frontend/vercel.json` builds with bun
+   (`bun install --frozen-lockfile`, `bun run build`).
 
    Or via CLI:
 
