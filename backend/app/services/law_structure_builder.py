@@ -639,7 +639,7 @@ def _build_section_i_minimum_deduction() -> LawSection:
         id="sec_i_minimum",
         section_number="199A(i)",
         title="Minimum Deduction Floor",
-        description="Starting in 2026, taxpayers with at least $1,000 of QBI receive a minimum deduction of $400, regardless of other limitations.",
+        description="Starting in 2026, taxpayers with at least $1,000 of aggregate QBI from active trades or businesses (material participation under §469(h)) receive a minimum deduction of $400, regardless of other limitations. Both amounts are inflation-indexed after 2026 (2025 base year).",
         legal_reference=LegalReference(
             section="199A(i)",
             title="Minimum deduction",
