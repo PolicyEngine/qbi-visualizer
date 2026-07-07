@@ -529,7 +529,7 @@ def build_form_mapping_response() -> FormMappingResponse:
             "id": "minimum_floor",
             "title": "Minimum Deduction Floor (2026+)",
             "form_lines": "§199A(i)",
-            "description": "$400 minimum deduction for taxpayers with at least $1,000 of QBI, effective for tax years beginning after Dec 31, 2025 (added by the One Big Beautiful Bill Act)"
+            "description": "$400 minimum deduction for taxpayers with at least $1,000 of aggregate QBI from active trades or businesses (material participation under §469(h)), effective for tax years beginning after Dec 31, 2025 (added by the One Big Beautiful Bill Act; both amounts inflation-indexed after 2026)"
         },
         {
             "id": "sstb_separate_bucket",
