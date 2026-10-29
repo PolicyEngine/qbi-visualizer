@@ -4,6 +4,7 @@ import { BASE_PATH, SITE_URL } from '@/config/site';
 import { ShellHeader } from './Shell';
 import SubHeader from './SubHeader';
 import './globals.css';
+import Script from 'next/script';
 
 // The app is mounted under a multizone basePath. The canonical, OG, and
 // sitemap URLs MUST include it — sub-pages live at e.g.
@@ -164,6 +165,22 @@ export default function RootLayout({
           <SubHeader />
           <main className="flex-1 lg:overflow-hidden">{children}</main>
         </div>
+        {/* Google Analytics: policyengine.org's GA4 property; this app is served at
+         * policyengine.org/us/qbi-calculator through a rewrite, where the main site's GA does not reach. */}
+        {process.env.NODE_ENV === 'production' && (
+          <>
+            <Script
+              src="https://www.googletagmanager.com/gtag/js?id=G-2YHG89FY0N"
+              strategy="afterInteractive"
+            />
+            <Script id="google-analytics" strategy="afterInteractive">
+              {`window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-2YHG89FY0N');`}
+            </Script>
+          </>
+        )}
       </body>
     </html>
   );
