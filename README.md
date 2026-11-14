@@ -17,7 +17,7 @@ The frontend calls `/api/*`, which `frontend/next.config.ts` rewrites to the bac
 
 ## Quick start
 
-Prerequisites: Python 3.10–3.12, [bun](https://bun.sh).
+Prerequisites: Python 3.11–3.12, [bun](https://bun.sh).
 
 Run `./start.sh` to set up and start both services, or start them manually:
 
